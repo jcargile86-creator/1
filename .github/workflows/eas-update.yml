@@ -4,9 +4,8 @@ name: Publish to Expo (EAS Update)
 # in the Expo Go app — no computer or local dev server needed.
 # Requires an Expo access token repo secret (EXPO_TOKEN or INSPECTIONAPP).
 #
-# Publishes one update per Expo SDK (each on its own EAS branch, e.g. sdk-56)
-# so whichever SDK the phone's Expo Go build supports, a compatible update
-# exists. Once the working SDK is confirmed, the matrix can be trimmed.
+# The app is pinned to Expo SDK 54 — the version the user's Expo Go supports —
+# and publishes to the EAS branch "sdk-54" that their phone already opens.
 
 on:
   workflow_dispatch:
@@ -25,19 +24,6 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - sdk: 54
-            expo_spec: expo@sdk-54
-          - sdk: 55
-            expo_spec: expo@sdk-55
-          - sdk: 56
-            expo_spec: expo@sdk-56
-          - sdk: 57
-            expo_spec: expo@latest
-    name: publish sdk-${{ matrix.sdk }}
     steps:
       - name: Check Expo token is available
         run: |
@@ -54,13 +40,9 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Install dependencies aligned to SDK ${{ matrix.sdk }}
+      - name: Install dependencies
         working-directory: app
-        run: |
-          npm config set legacy-peer-deps true
-          rm -f package-lock.json
-          npm install "${{ matrix.expo_spec }}"
-          npx expo install --fix
+        run: npm ci --legacy-peer-deps
 
       - name: Set up EAS CLI
         uses: expo/expo-github-action@v8
@@ -74,9 +56,4 @@ jobs:
 
       - name: Publish update
         working-directory: app
-        run: eas update --branch "sdk-${{ matrix.sdk }}" --message "SDK ${{ matrix.sdk }} · ${{ github.sha }}" --non-interactive
-
-      - name: How to open it
-        run: |
-          echo "Published branch sdk-${{ matrix.sdk }}. In Expo Go: open the 'inspectpro' project" \
-               "and pick the branch marked compatible."
+        run: eas update --branch sdk-54 --message "${{ github.sha }}" --non-interactive
