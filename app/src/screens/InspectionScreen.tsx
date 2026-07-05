@@ -4,19 +4,22 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
-import { AreaTab, SectionDef } from '../flows/types';
+import { AreaTab, SectionDef, QuestionDef } from '../flows/types';
 import { buildQueue, firstPendingIndex, QueueItem, sectionProgress } from '../flows/queue';
+import { answerKey } from '../types';
 import { generateReport } from '../report/generate';
 import PromptChecklist from '../components/PromptChecklist';
 import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Inspection'>;
 
+/** Tabs in natural inspection-walk order. */
 const AREA_TABS: { key: AreaTab; label: string }[] = [
-  { key: 'elevations', label: 'Elevations' },
+  { key: 'start', label: 'Start' },
+  { key: 'elevations', label: 'Elev' },
   { key: 'roof', label: 'Roof' },
   { key: 'inside', label: 'Inside' },
-  { key: 'general', label: 'General' },
+  { key: 'wrapup', label: 'Wrap-Up' },
 ];
 
 export default function InspectionScreen({ route, navigation }: Props) {
@@ -24,7 +27,7 @@ export default function InspectionScreen({ route, navigation }: Props) {
   const { getInspection, updateInspection } = useInspections();
   const inspection = getInspection(id);
   const [busy, setBusy] = useState(false);
-  const [area, setArea] = useState<AreaTab>('elevations');
+  const [area, setArea] = useState<AreaTab>('start');
   /** Selected sub-tab per area, so switching areas remembers your place. */
   const [subTab, setSubTab] = useState<Record<string, string>>({});
   const [newName, setNewName] = useState('');
@@ -37,8 +40,8 @@ export default function InspectionScreen({ route, navigation }: Props) {
   const flow = inspection ? getFlow(inspection.flowId) : undefined;
 
   const areaSections = useMemo(() => {
-    const map: Record<AreaTab, SectionDef[]> = { general: [], elevations: [], roof: [], inside: [] };
-    for (const s of flow?.sections ?? []) map[s.area ?? 'general'].push(s);
+    const map: Record<AreaTab, SectionDef[]> = { start: [], elevations: [], roof: [], inside: [], wrapup: [] };
+    for (const s of flow?.sections ?? []) map[s.area ?? 'wrapup'].push(s);
     return map;
   }, [flow]);
 
@@ -50,8 +53,7 @@ export default function InspectionScreen({ route, navigation }: Props) {
     );
   }
 
-  /** Sub-tabs for the current area. Roof: Eave · Overview · slope directions
-   *  · Wind. Elevations/Inside: one tab per instance. General: per section. */
+  /** Sub-tabs for the current area, in walk order. */
   const subTabs: { key: string; label: string; sectionId: string; instance?: string }[] = [];
   for (const s of areaSections[area]) {
     if (s.repeat) {
@@ -59,7 +61,7 @@ export default function InspectionScreen({ route, navigation }: Props) {
         subTabs.push({ key: `${s.id}:${inst}`, label: s.id === 'wind' ? `Facet ${inst}` : inst, sectionId: s.id, instance: inst });
       }
       if ((inspection.instances[s.id] ?? []).length === 0 && s.repeat.addable) {
-        subTabs.push({ key: `${s.id}:__add`, label: `+ ${s.repeat.noun}`, sectionId: s.id });
+        subTabs.push({ key: `${s.id}:__add`, label: `${s.title}`, sectionId: s.id });
       }
     } else {
       const short = s.id === 'roof-eave' ? 'Eave' : s.id === 'roof-overview' ? 'Overview' : s.title;
@@ -71,11 +73,34 @@ export default function InspectionScreen({ route, navigation }: Props) {
   const active = subTabs.find((t) => t.key === activeKey);
   const activeSection = active ? flow.sections.find((s) => s.id === active.sectionId) : undefined;
   const items: QueueItem[] = active && activeSection
-    ? buildQueue(flow, inspection, active.sectionId, active.instance).filter((q) => q.instance === active.instance || !activeSection.repeat)
+    ? buildQueue(flow, inspection, active.sectionId, active.instance)
     : [];
 
   const isNa = active ? inspection.sectionSkipped?.[active.sectionId] === true : false;
   const progress = active ? sectionProgress(flow, inspection, active.sectionId) : undefined;
+
+  /** Question set + answered count for the active sub-section. */
+  const questions: QuestionDef[] = activeSection
+    ? active?.instance
+      ? activeSection.instanceQuestions ?? []
+      : activeSection.questions ?? []
+    : [];
+  const answered = questions.filter((q) => {
+    const v = inspection.answers[answerKey(activeSection!.id, q.id, active?.instance)];
+    return v !== undefined && v !== '';
+  }).length;
+
+  const headerTitle = active
+    ? active.instance
+      ? activeSection?.id === 'wind'
+        ? `Facet ${active.instance}`
+        : activeSection?.id === 'test-squares'
+          ? `${active.instance} Slope — Test Square`
+          : activeSection?.id === 'interior'
+            ? active.instance
+            : `${active.instance} ${activeSection?.repeat?.noun ?? ''}`
+      : activeSection?.title ?? ''
+    : '';
 
   const resumeCapture = () => {
     const queue = buildQueue(flow, inspection);
@@ -129,8 +154,6 @@ export default function InspectionScreen({ route, navigation }: Props) {
     setAdding(null);
   };
 
-  /** Where "+ Add" puts a new instance: the active sub-tab's section when it
-   *  repeats (slope vs wind facet vs room), else the area's first addable. */
   const addTarget = activeSection?.repeat?.addable
     ? activeSection
     : areaSections[area].find((s) => s.repeat?.addable);
@@ -141,31 +164,33 @@ export default function InspectionScreen({ route, navigation }: Props) {
         <Text style={styles.resumeText}>Resume Guided Capture</Text>
       </Pressable>
 
-      {/* Top area tabs */}
+      {/* Top tabs — the walk: Start, Elevations, Roof, Inside, Wrap-Up */}
       <View style={styles.areaTabs}>
         {AREA_TABS.map((t) => (
           <Pressable key={t.key} style={[styles.areaTab, area === t.key && styles.areaTabActive]} onPress={() => setArea(t.key)}>
-            <Text style={[styles.areaTabText, area === t.key && styles.areaTabTextActive]}>{t.label}</Text>
+            <Text style={[styles.areaTabText, area === t.key && styles.areaTabTextActive]} numberOfLines={1}>{t.label}</Text>
           </Pressable>
         ))}
       </View>
 
-      {/* Sub tabs: directions / rooms / facets / roof stages */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabs} contentContainerStyle={{ gap: 8, paddingHorizontal: spacing.md }}>
-        {subTabs.map((t) => {
-          const sel = t.key === activeKey;
-          return (
-            <Pressable key={t.key} style={[styles.subTab, sel && styles.subTabActive]} onPress={() => setSubTab((s) => ({ ...s, [area]: t.key }))}>
-              <Text style={[styles.subTabText, sel && styles.subTabTextActive]}>{t.label}</Text>
+      {/* Sub-section tabs: directions / roof stages / rooms / facets */}
+      {(subTabs.length > 1 || addTarget) && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabs} contentContainerStyle={{ gap: 8, paddingHorizontal: spacing.md }}>
+          {subTabs.map((t) => {
+            const sel = t.key === activeKey;
+            return (
+              <Pressable key={t.key} style={[styles.subTab, sel && styles.subTabActive]} onPress={() => setSubTab((s) => ({ ...s, [area]: t.key }))}>
+                <Text style={[styles.subTabText, sel && styles.subTabTextActive]}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+          {addTarget && (
+            <Pressable style={[styles.subTab, styles.subTabAdd]} onPress={() => setAdding(adding ? null : addTarget.id)}>
+              <Text style={styles.subTabText}>+ {addTarget.repeat?.noun}</Text>
             </Pressable>
-          );
-        })}
-        {addTarget && (
-          <Pressable style={[styles.subTab, styles.subTabAdd]} onPress={() => setAdding(adding ? null : addTarget.id)}>
-            <Text style={styles.subTabText}>+ {addTarget.repeat?.noun}</Text>
-          </Pressable>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
 
       <ScrollView style={styles.content} contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xl * 2 }}>
         {adding && (
@@ -187,36 +212,50 @@ export default function InspectionScreen({ route, navigation }: Props) {
 
         {active && activeSection && (
           <>
-            {isNa && (
-              <View style={styles.naBanner}>
-                <Text style={styles.naBannerText}>Marked Not Applicable — excluded from guided capture</Text>
+            {/* Sub-section header — carries the visual weight */}
+            <View style={[styles.headerCard, isNa && { opacity: 0.6 }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerTitle}>{headerTitle}</Text>
+                {activeSection.subtitle && !active.instance ? <Text style={styles.headerSub}>{activeSection.subtitle}</Text> : null}
+                {progress && !isNa && (
+                  <View style={styles.progressWrap}>
+                    <View style={[styles.progressBar, { width: `${progress.requiredTotal ? Math.round((100 * progress.requiredDone) / progress.requiredTotal) : 0}%` }]} />
+                  </View>
+                )}
+                <Text style={styles.headerMeta}>
+                  {isNa ? 'Marked Not Applicable' : `${progress?.requiredDone ?? 0}/${progress?.requiredTotal ?? 0} required photos · ${progress?.captured ?? 0} taken`}
+                </Text>
               </View>
-            )}
-            <View style={styles.actionRow}>
-              <Pressable
-                style={[styles.actionBtn, { backgroundColor: colors.red }]}
-                onPress={() => navigation.navigate('Camera', { id, sectionId: active.sectionId, instance: active.instance })}
-              >
-                <Text style={styles.actionText}>Shoot</Text>
-              </Pressable>
-              {((active.instance && activeSection.instanceQuestions?.length) || (!active.instance && activeSection.questions?.length)) ? (
+              <View style={styles.headerActions}>
                 <Pressable
-                  style={[styles.actionBtn, { backgroundColor: colors.navy }]}
-                  onPress={() => navigation.navigate('Questions', { id, sectionId: active.sectionId, instance: active.instance })}
+                  style={styles.shootBtn}
+                  onPress={() => navigation.navigate('Camera', { id, sectionId: active.sectionId, instance: active.instance })}
                 >
-                  <Text style={styles.actionText}>{active.instance ? 'Data' : 'Questions'}</Text>
+                  <Text style={styles.shootText}>Shoot</Text>
                 </Pressable>
-              ) : null}
-              <Pressable style={[styles.actionBtn, styles.naBtn]} onPress={() => toggleNa(active.sectionId, activeSection.title)}>
-                <Text style={[styles.actionText, { color: colors.grayText }]}>{isNa ? 'Restore' : 'N/A'}</Text>
-              </Pressable>
+                <Pressable onPress={() => toggleNa(active.sectionId, activeSection.title)} hitSlop={8}>
+                  <Text style={styles.naLink}>{isNa ? 'Restore' : 'Mark N/A'}</Text>
+                </Pressable>
+              </View>
             </View>
-            {progress && (
-              <Text style={styles.progressText}>
-                {activeSection.title}
-                {active.instance ? ` · ${active.instance}` : ''} — {progress.requiredDone}/{progress.requiredTotal} required · {progress.captured} photos
-              </Text>
+
+            {/* Questions — prominent, right under the header */}
+            {questions.length > 0 && (
+              <Pressable
+                style={styles.questionsCard}
+                onPress={() => navigation.navigate('Questions', { id, sectionId: active.sectionId, instance: active.instance })}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.questionsTitle}>Questions & Measurements</Text>
+                  <Text style={styles.questionsMeta}>{answered}/{questions.length} answered</Text>
+                </View>
+                <View style={[styles.questionsBadge, answered >= questions.length && { backgroundColor: colors.green }]}>
+                  <Text style={styles.questionsBadgeText}>{answered >= questions.length ? '✓' : `${questions.length - answered}`}</Text>
+                </View>
+              </Pressable>
             )}
+
+            <Text style={styles.photosLabel}>PHOTOS</Text>
             <PromptChecklist
               items={items}
               inspection={inspection}
@@ -231,7 +270,7 @@ export default function InspectionScreen({ route, navigation }: Props) {
           </>
         )}
 
-        {area === 'general' && (
+        {area === 'wrapup' && (
           <View style={{ marginTop: spacing.md }}>
             <Pressable style={styles.reportBtn} onPress={makeReport} disabled={busy}>
               {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.reportText}>Generate PDF Inspection Report</Text>}
@@ -252,9 +291,9 @@ const styles = StyleSheet.create({
   resumeBtn: { backgroundColor: colors.red, margin: spacing.md, marginBottom: spacing.sm, borderRadius: touch.radius, minHeight: touch.minHeight, alignItems: 'center', justifyContent: 'center' },
   resumeText: { color: colors.white, fontSize: 18, fontWeight: '800' },
   areaTabs: { flexDirection: 'row', marginHorizontal: spacing.md, backgroundColor: colors.white, borderRadius: touch.radius, borderWidth: 1, borderColor: colors.grayLine, overflow: 'hidden' },
-  areaTab: { flex: 1, minHeight: touch.minHeight - 8, alignItems: 'center', justifyContent: 'center' },
+  areaTab: { flex: 1, minHeight: touch.minHeight - 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   areaTabActive: { backgroundColor: colors.navy },
-  areaTabText: { fontSize: 14, fontWeight: '800', color: colors.grayText },
+  areaTabText: { fontSize: 13, fontWeight: '800', color: colors.grayText },
   areaTabTextActive: { color: colors.white },
   subTabs: { marginTop: spacing.sm, maxHeight: 44, flexGrow: 0 },
   subTab: { borderRadius: 18, borderWidth: 1.5, borderColor: colors.grayLine, backgroundColor: colors.white, paddingHorizontal: 16, height: 38, alignItems: 'center', justifyContent: 'center' },
@@ -266,13 +305,40 @@ const styles = StyleSheet.create({
   addRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   addInput: { flex: 1, backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.grayLine, paddingHorizontal: spacing.md, minHeight: touch.minHeight - 8, fontSize: 16, color: colors.ink },
   addBtn: { backgroundColor: colors.navy, borderRadius: 10, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' },
-  naBanner: { backgroundColor: colors.grayText, borderRadius: 10, padding: spacing.sm, marginBottom: spacing.sm },
-  naBannerText: { color: colors.white, fontSize: 13, fontWeight: '700', textAlign: 'center' },
-  actionRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  actionBtn: { flex: 1, borderRadius: 10, minHeight: touch.minHeight - 8, alignItems: 'center', justifyContent: 'center' },
-  naBtn: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.grayLine, flex: 0.7 },
-  actionText: { color: colors.white, fontSize: 15, fontWeight: '800' },
-  progressText: { fontSize: 12, color: colors.grayText, marginBottom: spacing.sm, fontWeight: '600' },
+  headerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.navy,
+    borderRadius: touch.radius,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  headerTitle: { color: colors.white, fontSize: 19, fontWeight: '800' },
+  headerSub: { color: '#c6c9e8', fontSize: 12, marginTop: 2 },
+  progressWrap: { height: 5, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 3, marginTop: 8, overflow: 'hidden' },
+  progressBar: { height: 5, backgroundColor: '#7ee08a' },
+  headerMeta: { color: '#c6c9e8', fontSize: 11, marginTop: 5, fontWeight: '600' },
+  headerActions: { alignItems: 'center', gap: 8 },
+  shootBtn: { backgroundColor: colors.red, borderRadius: 10, paddingHorizontal: 22, minHeight: touch.minHeight - 10, alignItems: 'center', justifyContent: 'center' },
+  shootText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  naLink: { color: '#c6c9e8', fontSize: 12, fontWeight: '700' },
+  questionsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: touch.radius,
+    borderWidth: 2,
+    borderColor: colors.navy,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  questionsTitle: { color: colors.navy, fontSize: 16, fontWeight: '800' },
+  questionsMeta: { color: colors.grayText, fontSize: 12, marginTop: 2, fontWeight: '600' },
+  questionsBadge: { backgroundColor: colors.red, borderRadius: 14, minWidth: 28, height: 28, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  questionsBadgeText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  photosLabel: { fontSize: 12, fontWeight: '800', color: colors.grayText, letterSpacing: 1, marginBottom: 6, marginTop: 2 },
   reportBtn: { backgroundColor: colors.navy, borderRadius: touch.radius, minHeight: touch.minHeight + 4, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   sketchBtn: { backgroundColor: colors.white, borderWidth: 2, borderColor: colors.navy },
   reportText: { color: colors.white, fontSize: 17, fontWeight: '800' },

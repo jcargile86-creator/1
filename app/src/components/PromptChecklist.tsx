@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { QueueItem, isDone } from '../flows/queue';
 import { Inspection } from '../types';
-import { colors, spacing, touch } from '../theme';
+import { colors, spacing } from '../theme';
 
 interface Props {
   items: QueueItem[];
@@ -11,12 +11,13 @@ interface Props {
   onToggleSkip: (key: string) => void;
 }
 
-/** The prompt checklist rows shared by every tab: thumbnail, label, status.
- *  Tap opens the camera at that prompt; long-press toggles skip. */
+/** Lightweight photo-prompt rows: the sub-section header above them carries
+ *  the visual weight. A thumbnail appears only once a photo exists. Tap opens
+ *  the camera at that prompt; long-press toggles skip. */
 export default function PromptChecklist({ items, inspection, onOpen, onToggleSkip }: Props) {
   return (
-    <View>
-      {items.map((item) => {
+    <View style={styles.list}>
+      {items.map((item, i) => {
         const photos = inspection.photos.filter(
           (p) => p.sectionId === item.sectionId && p.promptId === item.prompt.id && p.instance === item.instance,
         );
@@ -25,31 +26,28 @@ export default function PromptChecklist({ items, inspection, onOpen, onToggleSki
         return (
           <Pressable
             key={item.key}
-            style={[styles.row, done && styles.rowDone]}
+            style={[styles.row, i > 0 && styles.rowBorder]}
             onPress={() => onOpen(item)}
             onLongPress={() => onToggleSkip(item.key)}
           >
-            {photos[0] ? (
-              <Image source={{ uri: photos[0].uri }} style={styles.thumb} />
-            ) : (
-              <View style={[styles.thumb, styles.thumbEmpty]}>
-                <Text style={{ fontSize: 16, color: colors.grayText }}>{skipped ? '—' : ''}</Text>
-              </View>
-            )}
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, skipped && styles.labelSkipped]}>{item.label}</Text>
-              {item.prompt.hint ? <Text style={styles.hint} numberOfLines={2}>{item.prompt.hint}</Text> : null}
+              <Text style={[styles.label, skipped && styles.labelSkipped, done && !skipped && styles.labelDone]}>
+                {item.label}
+              </Text>
               <Text style={styles.meta}>
                 {photos.length
                   ? `${photos.length} photo${photos.length > 1 ? 's' : ''}`
                   : skipped
-                    ? 'skipped (long-press to unskip)'
+                    ? 'skipped — long-press to restore'
                     : item.prompt.optional
                       ? 'optional'
                       : 'required'}
               </Text>
             </View>
-            <Text style={{ color: done ? colors.green : colors.grayLine, fontSize: 22 }}>{done ? '✓' : '›'}</Text>
+            {photos[0] ? (
+              <Image source={{ uri: photos[0].uri }} style={styles.thumb} />
+            ) : null}
+            <Text style={[styles.status, done && { color: colors.green }]}>{done ? '✓' : '›'}</Text>
           </Pressable>
         );
       })}
@@ -58,22 +56,26 @@ export default function PromptChecklist({ items, inspection, onOpen, onToggleSki
 }
 
 const styles = StyleSheet.create({
+  list: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.grayLine,
+    overflow: 'hidden',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: touch.radius,
-    borderWidth: 1,
-    borderColor: colors.grayLine,
-    padding: spacing.sm,
-    marginBottom: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
     gap: spacing.sm,
+    minHeight: 52,
   },
-  rowDone: { borderColor: colors.green },
-  thumb: { width: 54, height: 54, borderRadius: 8, backgroundColor: colors.offWhite },
-  thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 15, fontWeight: '700', color: colors.ink },
+  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.grayLine },
+  label: { fontSize: 14, fontWeight: '600', color: colors.ink },
+  labelDone: { color: colors.grayText },
   labelSkipped: { textDecorationLine: 'line-through', color: colors.grayText },
-  hint: { fontSize: 12, color: colors.grayText, marginTop: 2 },
-  meta: { fontSize: 11, color: colors.amber, marginTop: 3, fontWeight: '600' },
+  meta: { fontSize: 11, color: colors.grayText, marginTop: 1 },
+  thumb: { width: 40, height: 40, borderRadius: 6, backgroundColor: colors.offWhite },
+  status: { color: colors.grayLine, fontSize: 20, width: 18, textAlign: 'center' },
 });
