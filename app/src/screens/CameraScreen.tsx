@@ -40,7 +40,8 @@ const QUICK_TERMS = [
 
 interface PendingPhoto {
   photoId: string;
-  uri: string;
+  /** Null while the shot is still processing in the background. */
+  uri: string | null;
   /** True when this was an "extra shot" — confirming keeps the same prompt. */
   stay: boolean;
 }
@@ -75,11 +76,12 @@ export default function CameraScreen({ route, navigation }: Props) {
   const [index, setIndex] = useState(initialIndex);
   const [permission, requestPermission] = useCameraPermissions();
   const [flash, setFlash] = useState<FlashMode>('auto');
-  const [busy, setBusy] = useState(false);
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto | null>(null);
   const [caption, setCaption] = useState('');
   const cameraRef = useRef<CameraView>(null);
+  /** In-flight capture/save work — caption confirm/retake await this. */
+  const captureTask = useRef<Promise<boolean> | null>(null);
 
   if (!inspection || !flow) return null;
 
@@ -103,63 +105,84 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   const advance = () => setIndex((i) => Math.min(i + 1, queue.length));
 
-  /** Take the photo, store it with the smart default caption, then open the
-   *  caption card — no extra taps needed. */
-  const capture = async (stay: boolean) => {
-    if (!cameraRef.current || busy || !current || pending) return;
-    setBusy(true);
-    try {
-      const pic = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      if (!pic?.uri) return;
-      const photoId = Crypto.randomUUID();
-      const uri = persistPhoto(pic.uri, inspection.id, photoId);
-      await updateInspection(inspection.id, (d) => {
-        d.photos.push({
-          id: photoId,
-          uri,
-          sectionId: current.sectionId,
-          promptId: current.prompt.id,
-          instance: current.instance,
-          caption: current.label,
-          takenAt: new Date().toISOString(),
+  /** Shutter tap: the caption card opens INSTANTLY with the smart default;
+   *  the photo is captured, processed, and saved in the background. */
+  const capture = (stay: boolean) => {
+    if (!cameraRef.current || !current || pending) return;
+    const shot = current;
+    const photoId = Crypto.randomUUID();
+    const takenAt = new Date().toISOString();
+    setCaption(shot.label);
+    setPending({ photoId, uri: null, stay });
+    captureTask.current = (async () => {
+      try {
+        const pic = await cameraRef.current?.takePictureAsync({ quality: 0.7, skipProcessing: true });
+        if (!pic?.uri) throw new Error('no photo');
+        const uri = persistPhoto(pic.uri, inspection.id, photoId);
+        setPending((p) => (p && p.photoId === photoId ? { ...p, uri } : p));
+        setLastThumb(uri);
+        await updateInspection(inspection.id, (d) => {
+          d.photos.push({
+            id: photoId,
+            uri,
+            sectionId: shot.sectionId,
+            promptId: shot.prompt.id,
+            instance: shot.instance,
+            caption: shot.label,
+            takenAt,
+          });
+          delete d.skipped[shot.key];
         });
-        delete d.skipped[current.key];
-      });
-      setLastThumb(uri);
-      setCaption(current.label);
-      setPending({ photoId, uri, stay });
-    } finally {
-      setBusy(false);
-    }
+        return true;
+      } catch {
+        setPending((p) => (p && p.photoId === photoId ? null : p));
+        return false;
+      }
+    })();
   };
 
-  /** Next arrow: save the (possibly edited) caption and move on. */
+  /** Next arrow: advance immediately; the caption write catches up in the
+   *  background once the capture task lands. */
   const confirmCaption = () => {
     if (!pending) return;
+    const { photoId, stay } = pending;
     const finalCaption = caption.trim() || current?.label || 'Photo';
-    void updateInspection(inspection.id, (d) => {
-      const ph = d.photos.find((p) => p.id === pending.photoId);
-      if (ph) ph.caption = finalCaption;
-    });
-    if (!pending.stay) advance();
+    const task = captureTask.current;
     setPending(null);
     setCaption('');
+    if (!stay) advance();
+    void (async () => {
+      const ok = task ? await task : false;
+      if (!ok) return;
+      await updateInspection(inspection.id, (d) => {
+        const ph = d.photos.find((p) => p.id === photoId);
+        if (ph) ph.caption = finalCaption;
+      });
+    })();
   };
 
   /** Discard the shot and stay on the same prompt for a reshoot. */
   const retake = () => {
     if (!pending) return;
-    void updateInspection(inspection.id, (d) => {
-      d.photos = d.photos.filter((p) => p.id !== pending.photoId);
-    });
-    try {
-      new File(pending.uri).delete();
-    } catch {
-      // file cleanup is best-effort
-    }
-    setLastThumb(null);
+    const { photoId } = pending;
+    const task = captureTask.current;
     setPending(null);
     setCaption('');
+    setLastThumb(null);
+    void (async () => {
+      const ok = task ? await task : false;
+      if (!ok) return;
+      let uri: string | undefined;
+      await updateInspection(inspection.id, (d) => {
+        uri = d.photos.find((p) => p.id === photoId)?.uri;
+        d.photos = d.photos.filter((p) => p.id !== photoId);
+      });
+      try {
+        if (uri) new File(uri).delete();
+      } catch {
+        // file cleanup is best-effort
+      }
+    })();
   };
 
   const appendTerm = (term: string) => {
@@ -201,7 +224,7 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} flash={flash} facing="back" />
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} flash={flash} facing="back" animateShutter={false} />
 
       {/* Top overlay: what to shoot next */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
@@ -237,8 +260,8 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.sideText}>‹ Back</Text>
           </Pressable>
 
-          <Pressable onPress={() => void capture(false)} style={styles.shutter} disabled={busy || finished || !!pending}>
-            {busy ? <ActivityIndicator color={colors.navy} /> : <View style={styles.shutterInner} />}
+          <Pressable onPress={() => capture(false)} style={styles.shutter} disabled={finished || !!pending}>
+            <View style={styles.shutterInner} />
           </Pressable>
 
           <Pressable onPress={skip} style={styles.sideBtn} hitSlop={10} disabled={finished}>
@@ -247,7 +270,7 @@ export default function CameraScreen({ route, navigation }: Props) {
         </View>
         <View style={styles.bottomRow2}>
           {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
-          <Pressable onPress={() => void capture(true)} style={styles.extraBtn} disabled={busy || finished || !!pending}>
+          <Pressable onPress={() => capture(true)} style={styles.extraBtn} disabled={finished || !!pending}>
             <Text style={styles.extraText}>Extra shot</Text>
           </Pressable>
           <Pressable onPress={skipSection} style={styles.extraBtn} disabled={finished}>
@@ -267,7 +290,13 @@ export default function CameraScreen({ route, navigation }: Props) {
             keyboardShouldPersistTaps="handled"
             bounces={false}
           >
-            <Image source={{ uri: pending.uri }} style={styles.captionPreview} />
+            {pending.uri ? (
+              <Image source={{ uri: pending.uri }} style={styles.captionPreview} />
+            ) : (
+              <View style={[styles.captionPreview, styles.captionPreviewLoading]}>
+                <ActivityIndicator color={colors.white} />
+              </View>
+            )}
             <Text style={styles.captionLabel}>CAPTION — edit or add measurements</Text>
             <TextInput
               style={styles.captionInput}
@@ -333,6 +362,7 @@ const styles = StyleSheet.create({
   captionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,14,36,0.96)' },
   captionCardWrap: { flexGrow: 1, padding: spacing.md },
   captionPreview: { width: '100%', height: 260, borderRadius: 12, backgroundColor: '#111', resizeMode: 'cover' },
+  captionPreviewLoading: { alignItems: 'center', justifyContent: 'center' },
   captionLabel: { color: '#9fa5d6', fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: spacing.md, marginBottom: 6 },
   captionInput: {
     backgroundColor: colors.white,
