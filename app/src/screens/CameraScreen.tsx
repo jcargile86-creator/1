@@ -11,9 +11,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera';
+import { Camera, useCameraDevice, useCameraFormat, useCameraPermission } from 'react-native-vision-camera';
 import { File } from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Crypto from 'expo-crypto';
 import { RootStackParamList } from '../navigation';
@@ -24,6 +25,8 @@ import { persistPhoto } from '../store/photos';
 import { colors, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
+
+type FlashMode = 'off' | 'auto' | 'on';
 
 /** The 2–3 most likely ALDD condition terms for the shot being captioned. */
 function suggestTerms(sectionId: string, promptId?: string): string[] {
@@ -85,20 +88,23 @@ export default function CameraScreen({ route, navigation }: Props) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [index, setIndex] = useState(initialIndex);
-  const [permission, requestPermission] = useCameraPermissions();
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const device = useCameraDevice('back');
+  const format = useCameraFormat(device, [{ photoResolution: 'max' }]);
+  const isFocused = useIsFocused();
   // Flash OFF by default: 'auto' adds pre-flash metering lag to every shot.
   const [flash, setFlash] = useState<FlashMode>('off');
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto | null>(null);
   const [caption, setCaption] = useState('');
   const [editing, setEditing] = useState(false);
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<Camera>(null);
   /** In-flight capture/save work — caption confirm/retake await this. */
   const captureTask = useRef<Promise<boolean> | null>(null);
 
   if (!inspection || !flow) return null;
 
-  if (!permission?.granted) {
+  if (!hasPermission) {
     return (
       <View style={styles.permWrap}>
         <Text style={styles.permText}>InspectPro needs camera access to run guided capture.</Text>
@@ -129,9 +135,9 @@ export default function CameraScreen({ route, navigation }: Props) {
     setPending({ photoId, uri: null, stay });
     captureTask.current = (async () => {
       try {
-        const pic = await cameraRef.current?.takePictureAsync({ quality: 0.85, exif: false, skipProcessing: true });
-        if (!pic?.uri) throw new Error('no photo');
-        const uri = persistPhoto(pic.uri, inspection.id, photoId);
+        const pic = await cameraRef.current?.takePhoto({ flash, enableShutterSound: false });
+        if (!pic?.path) throw new Error('no photo');
+        const uri = persistPhoto(`file://${pic.path}`, inspection.id, photoId);
         setPending((p) => (p && p.photoId === photoId ? { ...p, uri } : p));
         setLastThumb(uri);
         await updateInspection(inspection.id, (d) => {
@@ -239,7 +245,22 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} flash={flash} facing="back" animateShutter={false} />
+      {device ? (
+        <Camera
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          device={device}
+          format={format}
+          isActive={isFocused}
+          photo
+          photoQualityBalance="speed"
+          enableZoomGesture
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+          <ActivityIndicator color={colors.white} />
+        </View>
+      )}
 
       {/* Top overlay: what to shoot next */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>

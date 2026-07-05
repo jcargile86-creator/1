@@ -2,8 +2,8 @@
   "expo": {
     "name": "InspectPro",
     "slug": "inspectpro",
-    "version": "0.1.0",
-    "runtimeVersion": { "policy": "sdkVersion" },
+    "version": "0.2.0",
+    "runtimeVersion": { "policy": "appVersion" },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -30,9 +30,10 @@
     },
     "plugins": [
       [
-        "expo-camera",
+        "react-native-vision-camera",
         {
-          "cameraPermission": "InspectPro uses the camera for guided inspection photo capture."
+          "cameraPermissionText": "InspectPro uses the camera for guided inspection photo capture.",
+          "enableMicrophonePermission": false
         }
       ]
     ]
