@@ -10,7 +10,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
 import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera';
 import { File } from 'expo-file-system';
@@ -26,17 +25,29 @@ import { colors, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
 
-/** Quick-append terms from the ALDD captioning protocol. */
-const QUICK_TERMS = [
-  'Potential Hail',
-  'Potential Wind',
-  'Potential Mechanical',
-  'Clean',
-  'Spatter Present',
-  'Painted',
-  'Granule Loss',
-  'Prior Repair',
-];
+/** The 2–3 most likely ALDD condition terms for the shot being captioned. */
+function suggestTerms(sectionId: string, promptId?: string): string[] {
+  switch (sectionId) {
+    case 'wind':
+      return ['Potential Wind', 'Potential Mechanical'];
+    case 'test-squares':
+      return ['Potential Hail', 'Granule Loss'];
+    case 'interior':
+      return ['Potential Leak', 'Water Stain'];
+    case 'roof-eave':
+      return ['Potential Hail', 'No Potential Hail', 'Painted'];
+    case 'roof-overview':
+      return ['Potential Hail', 'Painted', 'Clean'];
+    case 'elevations':
+      return promptId === 'collateral'
+        ? ['Clean', 'Spatter Present']
+        : ['Potential Hail', 'Potential Wind', 'Potential Mechanical'];
+    case 'wrapup':
+      return ['Prior Repair', 'Potential Wind'];
+    default:
+      return ['Potential Hail', 'Potential Wind'];
+  }
+}
 
 interface PendingPhoto {
   photoId: string;
@@ -79,6 +90,7 @@ export default function CameraScreen({ route, navigation }: Props) {
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto | null>(null);
   const [caption, setCaption] = useState('');
+  const [editing, setEditing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   /** In-flight capture/save work — caption confirm/retake await this. */
   const captureTask = useRef<Promise<boolean> | null>(null);
@@ -150,6 +162,7 @@ export default function CameraScreen({ route, navigation }: Props) {
     const task = captureTask.current;
     setPending(null);
     setCaption('');
+    setEditing(false);
     if (!stay) advance();
     void (async () => {
       const ok = task ? await task : false;
@@ -168,6 +181,7 @@ export default function CameraScreen({ route, navigation }: Props) {
     const task = captureTask.current;
     setPending(null);
     setCaption('');
+    setEditing(false);
     setLastThumb(null);
     void (async () => {
       const ok = task ? await task : false;
@@ -279,51 +293,59 @@ export default function CameraScreen({ route, navigation }: Props) {
         </View>
       </View>
 
-      {/* Caption card — appears automatically after every shot */}
+      {/* Caption review — full-screen photo with a slim caption bar. The
+          keyboard only appears when the inspector taps the caption. */}
       {pending && (
-        <KeyboardAvoidingView
-          style={styles.captionOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <ScrollView
-            contentContainerStyle={[styles.captionCardWrap, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.md }]}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
+        <View style={styles.captionOverlay}>
+          {pending.uri ? (
+            <Image source={{ uri: pending.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          ) : (
+            <View style={styles.captionLoading}>
+              <ActivityIndicator color={colors.white} size="large" />
+            </View>
+          )}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.captionBottomWrap}
+            pointerEvents="box-none"
           >
-            {pending.uri ? (
-              <Image source={{ uri: pending.uri }} style={styles.captionPreview} />
-            ) : (
-              <View style={[styles.captionPreview, styles.captionPreviewLoading]}>
-                <ActivityIndicator color={colors.white} />
-              </View>
-            )}
-            <Text style={styles.captionLabel}>CAPTION — edit or add measurements</Text>
-            <TextInput
-              style={styles.captionInput}
-              value={caption}
-              onChangeText={setCaption}
-              multiline
-              autoFocus
-              placeholder="Photo caption"
-              placeholderTextColor={colors.grayText}
-            />
-            <View style={styles.chipsWrap}>
-              {QUICK_TERMS.map((t) => (
-                <Pressable key={t} style={styles.chip} onPress={() => appendTerm(t)}>
-                  <Text style={styles.chipText}>+ {t}</Text>
+            <View style={[styles.captionBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+              {editing ? (
+                <TextInput
+                  style={styles.captionInput}
+                  value={caption}
+                  onChangeText={setCaption}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={() => setEditing(false)}
+                  onBlur={() => setEditing(false)}
+                  placeholder="Photo caption"
+                  placeholderTextColor={colors.grayText}
+                />
+              ) : (
+                <Pressable style={styles.captionRow} onPress={() => setEditing(true)}>
+                  <Text style={styles.captionText} numberOfLines={2}>{caption}</Text>
+                  <Text style={styles.editHint}>Edit</Text>
                 </Pressable>
-              ))}
+              )}
+              <View style={styles.chipsWrap}>
+                {current && suggestTerms(current.sectionId, current.prompt.id).map((t) => (
+                  <Pressable key={t} style={styles.chip} onPress={() => appendTerm(t)}>
+                    <Text style={styles.chipText}>+ {t}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.captionActions}>
+                <Pressable style={styles.retakeBtn} onPress={retake}>
+                  <Text style={styles.retakeText}>Retake</Text>
+                </Pressable>
+                <Pressable style={styles.nextBtn} onPress={confirmCaption}>
+                  <Text style={styles.nextText}>{pending.stay ? 'Done →' : 'Next →'}</Text>
+                </Pressable>
+              </View>
             </View>
-            <View style={styles.captionActions}>
-              <Pressable style={styles.retakeBtn} onPress={retake}>
-                <Text style={styles.retakeText}>Retake</Text>
-              </Pressable>
-              <Pressable style={styles.nextBtn} onPress={confirmCaption}>
-                <Text style={styles.nextText}>{pending.stay ? 'Done →' : 'Next →'}</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       )}
     </View>
   );
@@ -359,26 +381,27 @@ const styles = StyleSheet.create({
   lastThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)' },
   extraBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   extraText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  captionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,14,36,0.96)' },
-  captionCardWrap: { flexGrow: 1, padding: spacing.md },
-  captionPreview: { width: '100%', height: 260, borderRadius: 12, backgroundColor: '#111', resizeMode: 'cover' },
-  captionPreviewLoading: { alignItems: 'center', justifyContent: 'center' },
-  captionLabel: { color: '#9fa5d6', fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: spacing.md, marginBottom: 6 },
+  captionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  captionLoading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  captionBottomWrap: { flex: 1, justifyContent: 'flex-end' },
+  captionBar: { backgroundColor: 'rgba(12,14,36,0.88)', paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+  captionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
+  captionText: { flex: 1, color: colors.white, fontSize: 16, fontWeight: '700' },
+  editHint: { color: '#ffd54f', fontSize: 13, fontWeight: '800' },
   captionInput: {
     backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: spacing.md,
-    fontSize: 17,
+    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    fontSize: 16,
     color: colors.ink,
-    minHeight: 64,
-    textAlignVertical: 'top',
   },
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm },
-  chip: { backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.xs + 2 },
+  chip: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { color: colors.white, fontSize: 13, fontWeight: '700' },
-  captionActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  retakeBtn: { flex: 1, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  captionActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  retakeBtn: { flex: 1, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
   retakeText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-  nextBtn: { flex: 2, backgroundColor: colors.red, borderRadius: 12, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  nextBtn: { flex: 2, backgroundColor: colors.red, borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
   nextText: { color: colors.white, fontSize: 19, fontWeight: '800' },
 });
