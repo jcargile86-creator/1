@@ -1,0 +1,10 @@
+{
+  "mode": "standard",
+  "depth": "standard",
+  "parallelization": true,
+  "commit_style": "conventional",
+  "commit_cadence": "per-task",
+  "research": true,
+  "plan_checker": true,
+  "verifier": true
+}
