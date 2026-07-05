@@ -2,7 +2,11 @@ name: Publish to Expo (EAS Update)
 
 # Publishes the app JS bundle to Expo's servers so it can be opened on a phone
 # in the Expo Go app — no computer or local dev server needed.
-# Requires the EXPO_TOKEN repository secret (expo.dev access token).
+# Requires an Expo access token repo secret (EXPO_TOKEN or INSPECTIONAPP).
+#
+# Publishes one update per Expo SDK (each on its own EAS branch, e.g. sdk-56)
+# so whichever SDK the phone's Expo Go build supports, a compatible update
+# exists. Once the working SDK is confirmed, the matrix can be trimmed.
 
 on:
   workflow_dispatch:
@@ -21,16 +25,16 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [54, 55, 56, 57]
+    name: publish sdk-${{ matrix.sdk }}
     steps:
-      - name: List visible secret names (values never printed)
-        env:
-          SECRETS_JSON: ${{ toJSON(secrets) }}
-        run: echo "$SECRETS_JSON" | jq -r 'keys[]'
-
       - name: Check Expo token is available
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "::error::No Expo token. Add an EXPO_TOKEN repo secret (Settings → Secrets and variables → Actions)."
+            echo "::error::No Expo token. Add an EXPO_TOKEN (or INSPECTIONAPP) repo secret."
             exit 1
           fi
 
@@ -46,6 +50,12 @@ jobs:
         working-directory: app
         run: npm ci
 
+      - name: Align dependencies to SDK ${{ matrix.sdk }}
+        working-directory: app
+        run: |
+          npm install "expo@sdk-${{ matrix.sdk }}"
+          npx expo install --fix
+
       - name: Set up EAS CLI
         uses: expo/expo-github-action@v8
         with:
@@ -58,9 +68,9 @@ jobs:
 
       - name: Publish update
         working-directory: app
-        run: eas update --branch preview --message "${{ github.sha }}" --non-interactive
+        run: eas update --branch "sdk-${{ matrix.sdk }}" --message "SDK ${{ matrix.sdk }} · ${{ github.sha }}" --non-interactive
 
       - name: How to open it
         run: |
-          echo "Published. On your phone: install 'Expo Go', sign in with the same Expo account," \
-               "and open the 'inspectpro' project (branch: preview)."
+          echo "Published branch sdk-${{ matrix.sdk }}. In Expo Go: open the 'inspectpro' project" \
+               "and pick the branch marked compatible."
