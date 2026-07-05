@@ -108,6 +108,7 @@ jobs:
         run: |
           npm install --no-save jsonwebtoken@9
           node scripts/asc-credentials.mjs
+          node scripts/asc-appid.mjs
 
       - name: Build and auto-submit to TestFlight
         working-directory: app
@@ -120,3 +121,44 @@ jobs:
           EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '9M58GJ35HY' }}
           EXPO_APPLE_TEAM_TYPE: INDIVIDUAL
         run: eas build --platform ios --profile production --non-interactive --no-wait --auto-submit
+
+  # Submit an ALREADY-BUILT binary to TestFlight without spending a new build.
+  # Runs when the commit message contains [submit-ios].
+  ios-submit:
+    if: contains(github.event.head_commit.message, '[submit-ios]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci --legacy-peer-deps
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ env.EXPO_TOKEN }}
+
+      - name: Write App Store Connect API key
+        working-directory: app
+        run: printf '%s' "${{ secrets.ASC_API_KEY_P8 }}" > asc-api-key.p8
+
+      - name: Submit latest build to TestFlight
+        working-directory: app
+        env:
+          EXPO_ASC_API_KEY_PATH: ./asc-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID || '22NVTQ2YV3' }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID || '04d8baf4-88dd-48d7-b8cf-423d73fa9be5' }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '9M58GJ35HY' }}
+        run: |
+          eas init --force --non-interactive
+          npm install --no-save jsonwebtoken@9
+          node scripts/asc-appid.mjs
+          eas submit --platform ios --profile production --latest --non-interactive
