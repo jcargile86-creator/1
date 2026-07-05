@@ -6,6 +6,11 @@ name: Publish to Expo (EAS Update)
 
 on:
   workflow_dispatch:
+    inputs:
+      expo_token:
+        description: 'Expo access token (fallback when the EXPO_TOKEN secret is not set)'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -14,14 +19,17 @@ on:
       - 'app/**'
       - '.github/workflows/eas-update.yml'
 
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN || github.event.inputs.expo_token }}
+
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Check EXPO_TOKEN is configured
+      - name: Check Expo token is available
         run: |
-          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
-            echo "::error::EXPO_TOKEN secret is missing. Create an access token at https://expo.dev/settings/access-tokens and add it in repo Settings → Secrets and variables → Actions."
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::No Expo token. Add an EXPO_TOKEN repo secret (Settings → Secrets and variables → Actions) or pass one as the workflow input."
             exit 1
           fi
 
@@ -41,7 +49,7 @@ jobs:
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          token: ${{ env.EXPO_TOKEN }}
 
       - name: Link or create Expo project (idempotent)
         working-directory: app
