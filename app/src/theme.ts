@@ -15,3 +15,5 @@ export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
 
 // Field UI: big targets, high contrast (gloves + sunlight).
 export const touch = { minHeight: 52, radius: 12 };
+
+// EAS publish marker: 62da25b
