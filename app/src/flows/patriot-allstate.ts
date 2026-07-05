@@ -17,7 +17,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'arrival',
       title: 'Arrival & Setup',
-      icon: '🚚',
+      icon: '1',
       subtitle: 'Branding, vehicle, address verification',
       prompts: [
         { id: 'branding', label: 'Patriot Branding', hint: 'Selfie with branded apparel visible' },
@@ -35,7 +35,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'interior',
       title: 'Interior Rooms',
-      icon: '🛋️',
+      icon: '2',
       subtitle: 'Per-room findings (when in scope)',
       repeat: { noun: 'Room', addable: true },
       prompts: [
@@ -64,7 +64,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'elevations',
       title: 'Lower Elevations',
-      icon: '🏠',
+      icon: '3',
       subtitle: 'Siding, vents, collateral — F/L/B/R',
       repeat: { noun: 'Elevation', presets: ['Front', 'Left', 'Back', 'Right'], addable: true },
       prompts: [
@@ -98,7 +98,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'roof-eave',
       title: 'Roof Eave',
-      icon: '🪜',
+      icon: '4',
       subtitle: 'From the ladder, before stepping on',
       prompts: [
         { id: 'eave-overhang', label: 'Eave Overhang Measurement', hint: 'Tape visible: siding/frieze board to fascia — exclude the gutter' },
@@ -126,7 +126,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'roof-overview',
       title: 'Roof Overview & Components',
-      icon: '⛰️',
+      icon: '5',
       subtitle: '360s, valleys, ridge, ventilation',
       prompts: [
         { id: '360-front', label: '360 Overview - Front', hint: 'From highest central point' },
@@ -157,7 +157,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'test-squares',
       title: 'Test Squares',
-      icon: '📐',
+      icon: '6',
       subtitle: 'Per directional slope — largest size that fits',
       repeat: { noun: 'Slope', presets: ['Front', 'Left', 'Back', 'Right'], addable: true },
       prompts: [
@@ -182,7 +182,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'wind',
       title: 'Wind & Tree Impact',
-      icon: '💨',
+      icon: '7',
       subtitle: 'Per facet, from the CAD',
       repeat: { noun: 'Facet', addable: true },
       prompts: [
@@ -201,7 +201,7 @@ export const patriotAllstateFlow: FlowDef = {
     {
       id: 'wrapup',
       title: 'Questions & Wrap-Up',
-      icon: '📋',
+      icon: '8',
       subtitle: 'General, conditions, subrogation, tarps',
       prompts: [
         { id: 'tarp-before', label: 'Tarp - Before Detach', hint: 'Required when a tarp is present', optional: true },

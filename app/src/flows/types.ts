@@ -40,7 +40,7 @@ export interface RepeatDef {
 export interface SectionDef {
   id: string;
   title: string;
-  /** Emoji used on the section grid tile. */
+  /** Short badge text (e.g. section number) shown on the grid tile. */
   icon: string;
   subtitle?: string;
   /** When set, the section's prompts/questions run once per instance. */

@@ -81,7 +81,7 @@ export default function SketchScreen({ route, navigation }: Props) {
       </View>
       <View style={styles.row}>
         <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setPaths((p) => p.slice(0, -1))}>
-          <Text style={[styles.btnText, { color: colors.navy }]}>↩ Undo</Text>
+          <Text style={[styles.btnText, { color: colors.navy }]}>Undo</Text>
         </Pressable>
         <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setPaths([])}>
           <Text style={[styles.btnText, { color: colors.red }]}>Clear</Text>

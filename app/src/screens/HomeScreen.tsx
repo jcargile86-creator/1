@@ -28,7 +28,7 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <Pressable style={styles.newBtn} onPress={() => navigation.navigate('NewInspection')}>
-        <Text style={styles.newBtnText}>＋ Start New Inspection</Text>
+        <Text style={styles.newBtnText}>Start New Inspection</Text>
       </Pressable>
       <FlatList
         data={inspections}

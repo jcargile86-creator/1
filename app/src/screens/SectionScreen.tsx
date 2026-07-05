@@ -19,7 +19,7 @@ export default function SectionScreen({ route, navigation }: Props) {
   const section = flow?.sections.find((s) => s.id === sectionId);
 
   useLayoutEffect(() => {
-    navigation.setOptions({ title: section ? `${section.icon} ${section.title}` : 'Section' });
+    navigation.setOptions({ title: section ? section.title : 'Section' });
   }, [navigation, section]);
 
   if (!inspection || !flow || !section) {
@@ -83,7 +83,7 @@ export default function SectionScreen({ route, navigation }: Props) {
             style={styles.cameraBtn}
             onPress={() => navigation.navigate('Camera', { id, sectionId })}
           >
-            <Text style={styles.cameraText}>📷 Start Camera for This Section</Text>
+            <Text style={styles.cameraText}>Start Camera for This Section</Text>
           </Pressable>
           <Pressable
             style={[styles.naBtn, inspection.sectionSkipped?.[sectionId] && styles.naBtnActive]}
@@ -95,12 +95,12 @@ export default function SectionScreen({ route, navigation }: Props) {
             }
           >
             <Text style={[styles.naBtnText, inspection.sectionSkipped?.[sectionId] && { color: colors.white }]}>
-              {inspection.sectionSkipped?.[sectionId] ? '↩ Restore Section' : '⏭ Skip Entire Section (N/A)'}
+              {inspection.sectionSkipped?.[sectionId] ? 'Restore Section' : 'Skip Entire Section (N/A)'}
             </Text>
           </Pressable>
           {section.questions && section.questions.length > 0 && (
             <Pressable style={styles.qBtn} onPress={() => navigation.navigate('Questions', { id, sectionId })}>
-              <Text style={styles.qText}>📋 Section Questions</Text>
+              <Text style={styles.qText}>Section Questions</Text>
             </Pressable>
           )}
         </View>
@@ -111,11 +111,11 @@ export default function SectionScreen({ route, navigation }: Props) {
           {g.instance !== undefined && (
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <Pressable style={styles.smallBtn} onPress={() => navigation.navigate('Camera', { id, sectionId, instance: g.instance })}>
-                <Text style={styles.smallBtnText}>📷 Shoot</Text>
+                <Text style={styles.smallBtnText}>Shoot</Text>
               </Pressable>
               {section.instanceQuestions && (
                 <Pressable style={styles.smallBtn} onPress={() => navigation.navigate('Questions', { id, sectionId, instance: g.instance })}>
-                  <Text style={styles.smallBtnText}>📋 Data</Text>
+                  <Text style={styles.smallBtnText}>Data</Text>
                 </Pressable>
               )}
             </View>
@@ -136,7 +136,7 @@ export default function SectionScreen({ route, navigation }: Props) {
               <Image source={{ uri: photos[0].uri }} style={styles.thumb} />
             ) : (
               <View style={[styles.thumb, styles.thumbEmpty]}>
-                <Text style={{ fontSize: 18 }}>{skipped ? '⏭' : '📷'}</Text>
+                <Text style={{ fontSize: 16, color: colors.grayText }}>{skipped ? '—' : ''}</Text>
               </View>
             )}
             <View style={{ flex: 1 }}>

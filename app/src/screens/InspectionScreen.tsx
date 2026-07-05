@@ -70,7 +70,7 @@ export default function InspectionScreen({ route, navigation }: Props) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: spacing.xl * 2 }}>
       <Pressable style={styles.resumeBtn} onPress={resumeCapture}>
-        <Text style={styles.resumeText}>📷 Resume Guided Capture</Text>
+        <Text style={styles.resumeText}>Resume Guided Capture</Text>
         <Text style={styles.resumeSub}>Opens the camera at the next needed photo</Text>
       </Pressable>
 
@@ -105,10 +105,10 @@ export default function InspectionScreen({ route, navigation }: Props) {
 
       <Text style={styles.groupLabel}>Report & Export</Text>
       <Pressable style={styles.reportBtn} onPress={makeReport} disabled={busy}>
-        {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.reportText}>🧾 Generate PDF Inspection Report</Text>}
+        {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.reportText}>Generate PDF Inspection Report</Text>}
       </Pressable>
       <Pressable style={[styles.reportBtn, styles.sketchBtn]} onPress={() => navigation.navigate('Sketch', { id })}>
-        <Text style={[styles.reportText, { color: colors.navy }]}>✏️ Add Diagram / Sketch ({inspection.sketches.length})</Text>
+        <Text style={[styles.reportText, { color: colors.navy }]}>Add Diagram / Sketch ({inspection.sketches.length})</Text>
       </Pressable>
     </ScrollView>
   );
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   naPillActive: { backgroundColor: colors.grayText, borderColor: colors.grayText },
   naPillText: { fontSize: 11, fontWeight: '800', color: colors.grayText },
   naPillTextActive: { color: colors.white },
-  tileIcon: { fontSize: 30 },
+  tileIcon: { backgroundColor: colors.navy, color: colors.white, width: 26, height: 26, borderRadius: 13, textAlign: 'center', lineHeight: 26, fontWeight: '800', fontSize: 13, overflow: 'hidden' },
   tileTitle: { fontSize: 16, fontWeight: '800', color: colors.ink, marginTop: 6 },
   tileTitleNa: { textDecorationLine: 'line-through', color: colors.grayText },
   tileSub: { fontSize: 12, color: colors.grayText, marginTop: 2, minHeight: 30 },

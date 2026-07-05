@@ -139,11 +139,11 @@ export default function CameraScreen({ route, navigation }: Props) {
           </Pressable>
           <Text style={styles.counter}>{Math.min(index + 1, queue.length)}/{queue.length} · {doneCount} done</Text>
           <Pressable onPress={() => setFlash((f) => (f === 'off' ? 'auto' : f === 'auto' ? 'on' : 'off'))} hitSlop={12}>
-            <Text style={styles.flashText}>{flash === 'on' ? '⚡︎ ON' : flash === 'auto' ? '⚡︎ AUTO' : '⚡︎ OFF'}</Text>
+            <Text style={styles.flashText}>{flash === 'on' ? 'FLASH ON' : flash === 'auto' ? 'FLASH AUTO' : 'FLASH OFF'}</Text>
           </Pressable>
         </View>
         {finished ? (
-          <Text style={styles.label}>✅ All prompts covered — add extra shots or exit</Text>
+          <Text style={styles.label}>All prompts covered — add extra shots or exit</Text>
         ) : (
           <>
             <View style={styles.tagRow}>
@@ -190,13 +190,13 @@ export default function CameraScreen({ route, navigation }: Props) {
         <View style={styles.bottomRow2}>
           {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
           <Pressable onPress={() => void capture(true)} style={styles.extraBtn} disabled={busy || finished}>
-            <Text style={styles.extraText}>＋ Extra shot</Text>
+            <Text style={styles.extraText}>Extra shot</Text>
           </Pressable>
           <Pressable onPress={() => setShowDetail((s) => !s)} style={[styles.extraBtn, showDetail && { backgroundColor: colors.red }]}>
-            <Text style={styles.extraText}>✏️ Detail</Text>
+            <Text style={styles.extraText}>Detail</Text>
           </Pressable>
           <Pressable onPress={skipSection} style={styles.extraBtn} disabled={finished}>
-            <Text style={styles.extraText}>⏭ N/A Section</Text>
+            <Text style={styles.extraText}>N/A Section</Text>
           </Pressable>
         </View>
       </View>
