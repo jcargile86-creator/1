@@ -21,6 +21,11 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
+      - name: List visible secret names (values never printed)
+        env:
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: echo "$SECRETS_JSON" | jq -r 'keys[]'
+
       - name: Check Expo token is available
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
