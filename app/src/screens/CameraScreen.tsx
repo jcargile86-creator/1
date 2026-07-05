@@ -1,6 +1,19 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  ActivityIndicator,
+  Image,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera';
+import { File } from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Crypto from 'expo-crypto';
@@ -13,9 +26,30 @@ import { colors, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
 
+/** Quick-append terms from the ALDD captioning protocol. */
+const QUICK_TERMS = [
+  'Potential Hail',
+  'Potential Wind',
+  'Potential Mechanical',
+  'Clean',
+  'Spatter Present',
+  'Painted',
+  'Granule Loss',
+  'Prior Repair',
+];
+
+interface PendingPhoto {
+  photoId: string;
+  uri: string;
+  /** True when this was an "extra shot" — confirming keeps the same prompt. */
+  stay: boolean;
+}
+
 /**
  * The guided camera. Shows the next shot's label at the top, captures,
- * auto-advances, and stays open until the inspector taps ✕.
+ * pops a caption card after every shot (smart default = the prompt label,
+ * editable, quick-term chips), and the Next arrow advances to the next
+ * picture. Stays open until the inspector taps ✕.
  */
 export default function CameraScreen({ route, navigation }: Props) {
   const { id, sectionId, instance, startKey } = route.params;
@@ -41,10 +75,10 @@ export default function CameraScreen({ route, navigation }: Props) {
   const [index, setIndex] = useState(initialIndex);
   const [permission, requestPermission] = useCameraPermissions();
   const [flash, setFlash] = useState<FlashMode>('auto');
-  const [detail, setDetail] = useState('');
-  const [showDetail, setShowDetail] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lastThumb, setLastThumb] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingPhoto | null>(null);
+  const [caption, setCaption] = useState('');
   const cameraRef = useRef<CameraView>(null);
 
   if (!inspection || !flow) return null;
@@ -69,15 +103,16 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   const advance = () => setIndex((i) => Math.min(i + 1, queue.length));
 
+  /** Take the photo, store it with the smart default caption, then open the
+   *  caption card — no extra taps needed. */
   const capture = async (stay: boolean) => {
-    if (!cameraRef.current || busy || !current) return;
+    if (!cameraRef.current || busy || !current || pending) return;
     setBusy(true);
     try {
       const pic = await cameraRef.current.takePictureAsync({ quality: 0.7 });
       if (!pic?.uri) return;
       const photoId = Crypto.randomUUID();
       const uri = persistPhoto(pic.uri, inspection.id, photoId);
-      const caption = detail.trim() ? `${current.label} — ${detail.trim()}` : current.label;
       await updateInspection(inspection.id, (d) => {
         d.photos.push({
           id: photoId,
@@ -85,18 +120,55 @@ export default function CameraScreen({ route, navigation }: Props) {
           sectionId: current.sectionId,
           promptId: current.prompt.id,
           instance: current.instance,
-          caption,
+          caption: current.label,
           takenAt: new Date().toISOString(),
         });
         delete d.skipped[current.key];
       });
       setLastThumb(uri);
-      setDetail('');
-      setShowDetail(false);
-      if (!stay) advance();
+      setCaption(current.label);
+      setPending({ photoId, uri, stay });
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Next arrow: save the (possibly edited) caption and move on. */
+  const confirmCaption = () => {
+    if (!pending) return;
+    const finalCaption = caption.trim() || current?.label || 'Photo';
+    void updateInspection(inspection.id, (d) => {
+      const ph = d.photos.find((p) => p.id === pending.photoId);
+      if (ph) ph.caption = finalCaption;
+    });
+    if (!pending.stay) advance();
+    setPending(null);
+    setCaption('');
+  };
+
+  /** Discard the shot and stay on the same prompt for a reshoot. */
+  const retake = () => {
+    if (!pending) return;
+    void updateInspection(inspection.id, (d) => {
+      d.photos = d.photos.filter((p) => p.id !== pending.photoId);
+    });
+    try {
+      new File(pending.uri).delete();
+    } catch {
+      // file cleanup is best-effort
+    }
+    setLastThumb(null);
+    setPending(null);
+    setCaption('');
+  };
+
+  const appendTerm = (term: string) => {
+    setCaption((c) => {
+      const base = c.trim();
+      if (!base) return term;
+      if (base.toLowerCase().includes(term.toLowerCase())) return base;
+      return `${base} — ${term}`;
+    });
   };
 
   const skip = () => {
@@ -158,20 +230,6 @@ export default function CameraScreen({ route, navigation }: Props) {
         )}
       </View>
 
-      {/* Detail/caption input */}
-      {showDetail && current && (
-        <View style={[styles.detailWrap, { bottom: insets.bottom + 150 }]}>
-          <TextInput
-            style={styles.detailInput}
-            placeholder='Add detail to caption: measurement, adjective… e.g. potential hail 1.25"'
-            placeholderTextColor="#aab"
-            value={detail}
-            onChangeText={setDetail}
-            autoFocus
-          />
-        </View>
-      )}
-
       {/* Bottom controls */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.bottomRow}>
@@ -179,7 +237,7 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.sideText}>‹ Back</Text>
           </Pressable>
 
-          <Pressable onPress={() => void capture(false)} style={styles.shutter} disabled={busy || finished}>
+          <Pressable onPress={() => void capture(false)} style={styles.shutter} disabled={busy || finished || !!pending}>
             {busy ? <ActivityIndicator color={colors.navy} /> : <View style={styles.shutterInner} />}
           </Pressable>
 
@@ -189,17 +247,55 @@ export default function CameraScreen({ route, navigation }: Props) {
         </View>
         <View style={styles.bottomRow2}>
           {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
-          <Pressable onPress={() => void capture(true)} style={styles.extraBtn} disabled={busy || finished}>
+          <Pressable onPress={() => void capture(true)} style={styles.extraBtn} disabled={busy || finished || !!pending}>
             <Text style={styles.extraText}>Extra shot</Text>
-          </Pressable>
-          <Pressable onPress={() => setShowDetail((s) => !s)} style={[styles.extraBtn, showDetail && { backgroundColor: colors.red }]}>
-            <Text style={styles.extraText}>Detail</Text>
           </Pressable>
           <Pressable onPress={skipSection} style={styles.extraBtn} disabled={finished}>
             <Text style={styles.extraText}>N/A Section</Text>
           </Pressable>
         </View>
       </View>
+
+      {/* Caption card — appears automatically after every shot */}
+      {pending && (
+        <KeyboardAvoidingView
+          style={styles.captionOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={[styles.captionCardWrap, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.md }]}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            <Image source={{ uri: pending.uri }} style={styles.captionPreview} />
+            <Text style={styles.captionLabel}>CAPTION — edit or add measurements</Text>
+            <TextInput
+              style={styles.captionInput}
+              value={caption}
+              onChangeText={setCaption}
+              multiline
+              autoFocus
+              placeholder="Photo caption"
+              placeholderTextColor={colors.grayText}
+            />
+            <View style={styles.chipsWrap}>
+              {QUICK_TERMS.map((t) => (
+                <Pressable key={t} style={styles.chip} onPress={() => appendTerm(t)}>
+                  <Text style={styles.chipText}>+ {t}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.captionActions}>
+              <Pressable style={styles.retakeBtn} onPress={retake}>
+                <Text style={styles.retakeText}>Retake</Text>
+              </Pressable>
+              <Pressable style={styles.nextBtn} onPress={confirmCaption}>
+                <Text style={styles.nextText}>{pending.stay ? 'Done →' : 'Next →'}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
     </View>
   );
 }
@@ -224,8 +320,6 @@ const styles = StyleSheet.create({
   badgeText: { color: colors.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   label: { color: colors.white, fontSize: 22, fontWeight: '800', marginTop: 2 },
   hint: { color: '#d5d8f2', fontSize: 13, marginTop: 4 },
-  detailWrap: { position: 'absolute', left: spacing.md, right: spacing.md },
-  detailInput: { backgroundColor: 'rgba(20,23,55,0.92)', color: colors.white, borderRadius: 12, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15 },
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,23,55,0.82)', paddingTop: spacing.sm, paddingHorizontal: spacing.md },
   bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   bottomRow2: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
@@ -236,4 +330,25 @@ const styles = StyleSheet.create({
   lastThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)' },
   extraBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   extraText: { color: colors.white, fontSize: 14, fontWeight: '700' },
+  captionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,14,36,0.96)' },
+  captionCardWrap: { flexGrow: 1, padding: spacing.md },
+  captionPreview: { width: '100%', height: 260, borderRadius: 12, backgroundColor: '#111', resizeMode: 'cover' },
+  captionLabel: { color: '#9fa5d6', fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: spacing.md, marginBottom: 6 },
+  captionInput: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: spacing.md,
+    fontSize: 17,
+    color: colors.ink,
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm },
+  chip: { backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
+  chipText: { color: colors.white, fontSize: 13, fontWeight: '700' },
+  captionActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  retakeBtn: { flex: 1, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  retakeText: { color: colors.white, fontSize: 16, fontWeight: '700' },
+  nextBtn: { flex: 2, backgroundColor: colors.red, borderRadius: 12, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  nextText: { color: colors.white, fontSize: 19, fontWeight: '800' },
 });
