@@ -86,7 +86,8 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   const [index, setIndex] = useState(initialIndex);
   const [permission, requestPermission] = useCameraPermissions();
-  const [flash, setFlash] = useState<FlashMode>('auto');
+  // Flash OFF by default: 'auto' adds pre-flash metering lag to every shot.
+  const [flash, setFlash] = useState<FlashMode>('off');
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto | null>(null);
   const [caption, setCaption] = useState('');
@@ -128,7 +129,7 @@ export default function CameraScreen({ route, navigation }: Props) {
     setPending({ photoId, uri: null, stay });
     captureTask.current = (async () => {
       try {
-        const pic = await cameraRef.current?.takePictureAsync({ quality: 0.7, skipProcessing: true });
+        const pic = await cameraRef.current?.takePictureAsync({ quality: 0.85, exif: false, skipProcessing: true });
         if (!pic?.uri) throw new Error('no photo');
         const uri = persistPhoto(pic.uri, inspection.id, photoId);
         setPending((p) => (p && p.photoId === photoId ? { ...p, uri } : p));
