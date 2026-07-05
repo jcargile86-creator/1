@@ -39,3 +39,11 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+dist.key
+dist.csr
+dist.cer
+dist.pem
+dist.p12
+*.mobileprovision
+credentials.json
+asc-api-key.p8

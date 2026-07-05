@@ -99,6 +99,16 @@ jobs:
           eas init --force --non-interactive
           eas update:configure --non-interactive
 
+      - name: Provision iOS signing (certificate + profile via ASC API)
+        working-directory: app
+        env:
+          EXPO_ASC_API_KEY_PATH: ./asc-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID || '22NVTQ2YV3' }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID || '04d8baf4-88dd-48d7-b8cf-423d73fa9be5' }}
+        run: |
+          npm install --no-save jsonwebtoken@9
+          node scripts/asc-credentials.mjs
+
       - name: Build and auto-submit to TestFlight
         working-directory: app
         env:
