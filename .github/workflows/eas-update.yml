@@ -57,3 +57,59 @@ jobs:
       - name: Publish update
         working-directory: app
         run: eas update --branch sdk-54 --message "${{ github.sha }}" --non-interactive
+
+  # Full native iOS build + TestFlight submission. Runs only when the commit
+  # message contains [build-ios] — OTA updates handle everything else.
+  ios-build:
+    if: contains(github.event.head_commit.message, '[build-ios]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Apple secrets are available
+        run: |
+          missing=""
+          [ -z "${{ secrets.ASC_API_KEY_P8 }}" ] && missing="$missing ASC_API_KEY_P8"
+          [ -z "${{ secrets.ASC_KEY_ID }}" ] && missing="$missing ASC_KEY_ID"
+          [ -z "${{ secrets.ASC_ISSUER_ID }}" ] && missing="$missing ASC_ISSUER_ID"
+          [ -z "${{ secrets.APPLE_TEAM_ID }}" ] && missing="$missing APPLE_TEAM_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secrets:$missing"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci --legacy-peer-deps
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ env.EXPO_TOKEN }}
+
+      - name: Write App Store Connect API key
+        working-directory: app
+        run: printf '%s' "${{ secrets.ASC_API_KEY_P8 }}" > asc-api-key.p8
+
+      - name: Link Expo project and configure updates
+        working-directory: app
+        run: |
+          eas init --force --non-interactive
+          eas update:configure --non-interactive
+
+      - name: Build and auto-submit to TestFlight
+        working-directory: app
+        env:
+          EXPO_ASC_API_KEY_PATH: ./asc-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPO_APPLE_TEAM_TYPE: INDIVIDUAL
+        run: eas build --platform ios --profile production --non-interactive --no-wait --auto-submit
