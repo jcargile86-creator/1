@@ -37,12 +37,17 @@ export interface RepeatDef {
   addable?: boolean;
 }
 
+/** Top-level tab the section lives under in the inspection screen. */
+export type AreaTab = 'general' | 'elevations' | 'roof' | 'inside';
+
 export interface SectionDef {
   id: string;
   title: string;
   /** Short badge text (e.g. section number) shown on the grid tile. */
   icon: string;
   subtitle?: string;
+  /** Which top tab this section belongs to (defaults to 'general'). */
+  area?: AreaTab;
   /** When set, the section's prompts/questions run once per instance. */
   repeat?: RepeatDef;
   prompts: PromptDef[];

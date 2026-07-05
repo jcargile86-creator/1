@@ -16,6 +16,7 @@ export const patriotAllstateFlow: FlowDef = {
   sections: [
     {
       id: 'arrival',
+      area: 'general',
       title: 'Arrival & Setup',
       icon: '1',
       subtitle: 'Branding, vehicle, address verification',
@@ -34,6 +35,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'interior',
+      area: 'inside',
       title: 'Interior Rooms',
       icon: '2',
       subtitle: 'Per-room findings (when in scope)',
@@ -63,6 +65,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'elevations',
+      area: 'elevations',
       title: 'Lower Elevations',
       icon: '3',
       subtitle: 'Siding, vents, collateral — F/L/B/R',
@@ -97,6 +100,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'roof-eave',
+      area: 'roof',
       title: 'Roof Eave',
       icon: '4',
       subtitle: 'From the ladder, before stepping on',
@@ -125,6 +129,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'roof-overview',
+      area: 'roof',
       title: 'Roof Overview & Components',
       icon: '5',
       subtitle: '360s, valleys, ridge, ventilation',
@@ -156,6 +161,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'test-squares',
+      area: 'roof',
       title: 'Test Squares',
       icon: '6',
       subtitle: 'Per directional slope — largest size that fits',
@@ -181,6 +187,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'wind',
+      area: 'roof',
       title: 'Wind & Tree Impact',
       icon: '7',
       subtitle: 'Per facet, from the CAD',
@@ -200,6 +207,7 @@ export const patriotAllstateFlow: FlowDef = {
     },
     {
       id: 'wrapup',
+      area: 'general',
       title: 'Questions & Wrap-Up',
       icon: '8',
       subtitle: 'General, conditions, subrogation, tarps',
