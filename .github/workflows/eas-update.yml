@@ -1,0 +1,57 @@
+name: Publish to Expo (EAS Update)
+
+# Publishes the app JS bundle to Expo's servers so it can be opened on a phone
+# in the Expo Go app — no computer or local dev server needed.
+# Requires the EXPO_TOKEN repository secret (expo.dev access token).
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - claude/home-inspection-app-gsd-ym2es2
+    paths:
+      - 'app/**'
+      - '.github/workflows/eas-update.yml'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check EXPO_TOKEN is configured
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN secret is missing. Create an access token at https://expo.dev/settings/access-tokens and add it in repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Link or create Expo project (idempotent)
+        working-directory: app
+        run: eas init --force --non-interactive
+
+      - name: Publish update
+        working-directory: app
+        run: eas update --branch preview --message "${{ github.sha }}" --non-interactive
+
+      - name: How to open it
+        run: |
+          echo "Published. On your phone: install 'Expo Go', sign in with the same Expo account," \
+               "and open the 'inspectpro' project (branch: preview)."

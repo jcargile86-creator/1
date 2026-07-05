@@ -3,6 +3,7 @@
     "name": "InspectPro",
     "slug": "inspectpro",
     "version": "0.1.0",
+    "runtimeVersion": { "policy": "sdkVersion" },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
