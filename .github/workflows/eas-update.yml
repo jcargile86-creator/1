@@ -64,15 +64,10 @@ jobs:
     if: contains(github.event.head_commit.message, '[build-ios]')
     runs-on: ubuntu-latest
     steps:
-      - name: Check Apple secrets are available
+      - name: Check Apple private key secret is available
         run: |
-          missing=""
-          [ -z "${{ secrets.ASC_API_KEY_P8 }}" ] && missing="$missing ASC_API_KEY_P8"
-          [ -z "${{ secrets.ASC_KEY_ID }}" ] && missing="$missing ASC_KEY_ID"
-          [ -z "${{ secrets.ASC_ISSUER_ID }}" ] && missing="$missing ASC_ISSUER_ID"
-          [ -z "${{ secrets.APPLE_TEAM_ID }}" ] && missing="$missing APPLE_TEAM_ID"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing repo secrets:$missing"
+          if [ -z "${{ secrets.ASC_API_KEY_P8 }}" ]; then
+            echo "::error::Missing repo secret ASC_API_KEY_P8 (the -----BEGIN PRIVATE KEY----- block)."
             exit 1
           fi
 
@@ -108,8 +103,10 @@ jobs:
         working-directory: app
         env:
           EXPO_ASC_API_KEY_PATH: ./asc-api-key.p8
-          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Key/Issuer/Team IDs are identifiers, not credentials — safe in the
+          # workflow. Repo secrets of the same names override when present.
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID || '22NVTQ2YV3' }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID || '04d8baf4-88dd-48d7-b8cf-423d73fa9be5' }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '9M58GJ35HY' }}
           EXPO_APPLE_TEAM_TYPE: INDIVIDUAL
         run: eas build --platform ios --profile production --non-interactive --no-wait --auto-submit
