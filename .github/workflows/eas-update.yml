@@ -28,7 +28,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: [54, 55, 56, 57]
+        include:
+          - sdk: 54
+            expo_spec: expo@sdk-54
+          - sdk: 55
+            expo_spec: expo@sdk-55
+          - sdk: 56
+            expo_spec: expo@sdk-56
+          - sdk: 57
+            expo_spec: expo@latest
     name: publish sdk-${{ matrix.sdk }}
     steps:
       - name: Check Expo token is available
@@ -46,14 +54,12 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Install dependencies
-        working-directory: app
-        run: npm ci
-
-      - name: Align dependencies to SDK ${{ matrix.sdk }}
+      - name: Install dependencies aligned to SDK ${{ matrix.sdk }}
         working-directory: app
         run: |
-          npm install "expo@sdk-${{ matrix.sdk }}"
+          npm config set legacy-peer-deps true
+          rm -f package-lock.json
+          npm install "${{ matrix.expo_spec }}"
           npx expo install --fix
 
       - name: Set up EAS CLI
