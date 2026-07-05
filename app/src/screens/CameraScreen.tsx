@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, TextInput, ActivityIndicator, Image } from 'react-native';
+import { View, Text, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Alert } from 'react-native';
 import { CameraView, useCameraPermissions, FlashMode } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -7,7 +7,7 @@ import * as Crypto from 'expo-crypto';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
-import { buildQueue, firstPendingIndex, isDone } from '../flows/queue';
+import { buildQueue, firstPendingIndex, isDone, nextSectionIndex } from '../flows/queue';
 import { persistPhoto } from '../store/photos';
 import { colors, spacing } from '../theme';
 
@@ -107,6 +107,26 @@ export default function CameraScreen({ route, navigation }: Props) {
     advance();
   };
 
+  /** One-tap category skip: mark the current section N/A and jump past it. */
+  const skipSection = () => {
+    if (!current) return;
+    Alert.alert(`Skip "${current.sectionTitle}"?`, 'Marks the whole section Not Applicable. You can restore it from the section menu.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Skip Section',
+        style: 'destructive',
+        onPress: () => {
+          void updateInspection(inspection.id, (d) => {
+            d.sectionSkipped[current.sectionId] = true;
+          });
+          const next = nextSectionIndex(queue, index);
+          if (next >= queue.length && sectionId) navigation.goBack();
+          else setIndex(next);
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={styles.container}>
       <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} flash={flash} facing="back" />
@@ -126,7 +146,12 @@ export default function CameraScreen({ route, navigation }: Props) {
           <Text style={styles.label}>✅ All prompts covered — add extra shots or exit</Text>
         ) : (
           <>
-            <Text style={styles.sectionTag}>{current.sectionTitle}{current.instance ? ` · ${current.instance}` : ''}{isDone(inspection, current.key) ? ' · ✓ captured' : ''}</Text>
+            <View style={styles.tagRow}>
+              <Text style={styles.sectionTag}>{current.sectionTitle}{current.instance ? ` · ${current.instance}` : ''}{isDone(inspection, current.key) ? ' · ✓ captured' : ''}</Text>
+              <View style={[styles.badge, current.prompt.optional ? styles.badgeOptional : styles.badgeRequired]}>
+                <Text style={styles.badgeText}>{current.prompt.optional ? 'OPTIONAL — SKIP IF N/A' : 'REQUIRED'}</Text>
+              </View>
+            </View>
             <Text style={styles.label}>{current.label}</Text>
             {current.prompt.hint ? <Text style={styles.hint}>{current.prompt.hint}</Text> : null}
           </>
@@ -165,10 +190,13 @@ export default function CameraScreen({ route, navigation }: Props) {
         <View style={styles.bottomRow2}>
           {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
           <Pressable onPress={() => void capture(true)} style={styles.extraBtn} disabled={busy || finished}>
-            <Text style={styles.extraText}>＋ Extra shot (same label)</Text>
+            <Text style={styles.extraText}>＋ Extra shot</Text>
           </Pressable>
           <Pressable onPress={() => setShowDetail((s) => !s)} style={[styles.extraBtn, showDetail && { backgroundColor: colors.red }]}>
             <Text style={styles.extraText}>✏️ Detail</Text>
+          </Pressable>
+          <Pressable onPress={skipSection} style={styles.extraBtn} disabled={finished}>
+            <Text style={styles.extraText}>⏭ N/A Section</Text>
           </Pressable>
         </View>
       </View>
@@ -188,7 +216,12 @@ const styles = StyleSheet.create({
   closeText: { color: colors.white, fontSize: 24, fontWeight: '700' },
   counter: { color: '#c6c9e8', fontSize: 13, fontWeight: '700' },
   flashText: { color: '#ffd54f', fontSize: 13, fontWeight: '800' },
-  sectionTag: { color: '#9fa5d6', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  tagRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  sectionTag: { color: '#9fa5d6', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 1 },
+  badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeRequired: { backgroundColor: colors.red },
+  badgeOptional: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  badgeText: { color: colors.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   label: { color: colors.white, fontSize: 22, fontWeight: '800', marginTop: 2 },
   hint: { color: '#d5d8f2', fontSize: 13, marginTop: 4 },
   detailWrap: { position: 'absolute', left: spacing.md, right: spacing.md },

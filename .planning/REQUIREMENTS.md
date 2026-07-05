@@ -19,6 +19,8 @@
 - [ ] **CAM-03**: Inspector can skip a prompt, go back, or retake
 - [ ] **CAM-04**: Inspector can add extra unprompted photos with editable ALDD-style captions and append measurements/condition adjectives
 - [ ] **CAM-05**: Photos are timestamped and tagged with section + prompt label
+- [ ] **CAM-06**: Camera shows REQUIRED vs OPTIONAL badge per prompt; optional prompts are one-tap skippable
+- [ ] **CAM-07**: Whole sections can be marked N/A with one button (camera, section screen, or section-grid pill) and excluded from guided capture; restorable anytime
 
 ### Carrier Flows
 

@@ -9,6 +9,33 @@ Photo labels follow **ALDD**: `Area, Location, Description, Detail` — e.g.
 present, potential hail, potential wind, potential mechanical, painted) and measurements go in
 the caption.
 
+## Required on EVERY claim (derived from transcript mandates)
+
+The transcript marks these as unconditional — documented on every inspection **even when no
+damage is present**:
+
+- **Arrival**: branding photo, inspection vehicle, front of house, risk-address verification,
+  Cougar Paws at access point ("now a mandatory part of every roof inspection")
+- **Every elevation**: overview, siding type + exposure w/ tape, collateral items ("even if
+  they are clean, their condition needs to be part of the inspection package")
+- **Roof eave (before leaving the ladder)**: eave overhang, shingle/metal gauge, pitch, layer
+  view, underlayment, drip edge, topside gutter chalked ("complete and defensible
+  documentation" — chalk even when calling *no potential hail*)
+- **Roof**: 360 overviews per direction ("required on every inspection"), hip & ridge condition
+  photos ("whether or not damage is present"), ridge vent with measurement ("must be documented
+  on every inspection… measurement for every instance is required"), ventilation counts per
+  slope ("every ventilation item on every slope must be reviewed and documented")
+- **Test squares**: label, overview, section photos — "required for all wind and hail
+  inspections", largest size the slope allows
+- **Wrap-up questions**: general questions, shingle-condition matrix ("must be answered for
+  every roofing product"), subrogation items
+
+Everything else is presence- or findings-dependent (interior rooms, siding damage, house wrap,
+foam, trim, elevation vents, light blocks, cornice returns, valleys, chimney, skylights, wind,
+tree impact, tarps, prior repairs, solar/satellite, gutter protection) → **optional prompts**,
+quick-skippable in the camera, and whole categories (Interior, Wind & Tree Impact) can be
+marked N/A with one button.
+
 ## Sections (inspector can start from any)
 
 ### 1. Arrival & Setup

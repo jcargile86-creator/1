@@ -50,6 +50,8 @@ export interface Inspection {
   instances: Record<string, string[]>;
   /** prompt keys (`sectionId:instance?:promptId`) the inspector skipped */
   skipped: Record<string, boolean>;
+  /** whole sections marked Not Applicable (e.g. Interior on an exterior-only claim) */
+  sectionSkipped: Record<string, boolean>;
   sketches: SketchRecord[];
 }
 

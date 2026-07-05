@@ -12,9 +12,29 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Inspection'>;
 
 export default function InspectionScreen({ route, navigation }: Props) {
   const { id } = route.params;
-  const { getInspection } = useInspections();
+  const { getInspection, updateInspection } = useInspections();
   const inspection = getInspection(id);
   const [busy, setBusy] = useState(false);
+
+  const toggleSectionNa = (sectionId: string, title: string, currentlyNa: boolean) => {
+    if (currentlyNa) {
+      void updateInspection(id, (d) => {
+        delete d.sectionSkipped[sectionId];
+      });
+      return;
+    }
+    Alert.alert(`Skip "${title}"?`, 'The whole section will be marked Not Applicable and left out of guided capture. You can restore it anytime.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Mark N/A',
+        style: 'destructive',
+        onPress: () =>
+          void updateInspection(id, (d) => {
+            d.sectionSkipped[sectionId] = true;
+          }),
+      },
+    ]);
+  };
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: inspection ? `Claim ${inspection.claim.claimNumber || '—'}` : 'Inspection' });
@@ -59,15 +79,25 @@ export default function InspectionScreen({ route, navigation }: Props) {
         {flow.sections.map((s) => {
           const p = sectionProgress(flow, inspection, s.id);
           const done = p.requiredTotal > 0 && p.requiredDone >= p.requiredTotal;
+          const na = p.notApplicable;
           return (
-            <Pressable key={s.id} style={[styles.tile, done && styles.tileDone]} onPress={() => navigation.navigate('Section', { id, sectionId: s.id })}>
-              <Text style={styles.tileIcon}>{s.icon}</Text>
-              <Text style={styles.tileTitle}>{s.title}</Text>
-              <Text style={styles.tileSub} numberOfLines={2}>{s.subtitle}</Text>
-              <View style={styles.progressWrap}>
-                <View style={[styles.progressBar, { width: `${p.requiredTotal ? Math.round((100 * p.requiredDone) / p.requiredTotal) : 0}%` }]} />
+            <Pressable key={s.id} style={[styles.tile, done && styles.tileDone, na && styles.tileNa]} onPress={() => navigation.navigate('Section', { id, sectionId: s.id })}>
+              <View style={styles.tileHead}>
+                <Text style={styles.tileIcon}>{s.icon}</Text>
+                <Pressable
+                  hitSlop={8}
+                  style={[styles.naPill, na && styles.naPillActive]}
+                  onPress={() => toggleSectionNa(s.id, s.title, na)}
+                >
+                  <Text style={[styles.naPillText, na && styles.naPillTextActive]}>N/A</Text>
+                </Pressable>
               </View>
-              <Text style={styles.tileMeta}>{p.captured} photos · {p.requiredDone}/{p.requiredTotal} required</Text>
+              <Text style={[styles.tileTitle, na && styles.tileTitleNa]}>{s.title}</Text>
+              <Text style={styles.tileSub} numberOfLines={2}>{na ? 'Marked not applicable — tap N/A to restore' : s.subtitle}</Text>
+              <View style={styles.progressWrap}>
+                <View style={[styles.progressBar, { width: na ? '100%' : `${p.requiredTotal ? Math.round((100 * p.requiredDone) / p.requiredTotal) : 0}%` }, na && { backgroundColor: colors.grayLine }]} />
+              </View>
+              <Text style={styles.tileMeta}>{na ? 'skipped' : `${p.captured} photos · ${p.requiredDone}/${p.requiredTotal} required`}</Text>
             </Pressable>
           );
         })}
@@ -101,8 +131,15 @@ const styles = StyleSheet.create({
     borderColor: colors.grayLine,
   },
   tileDone: { borderColor: colors.green, borderWidth: 2 },
+  tileNa: { opacity: 0.55, backgroundColor: colors.offWhite },
+  tileHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  naPill: { borderWidth: 1.5, borderColor: colors.grayLine, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
+  naPillActive: { backgroundColor: colors.grayText, borderColor: colors.grayText },
+  naPillText: { fontSize: 11, fontWeight: '800', color: colors.grayText },
+  naPillTextActive: { color: colors.white },
   tileIcon: { fontSize: 30 },
   tileTitle: { fontSize: 16, fontWeight: '800', color: colors.ink, marginTop: 6 },
+  tileTitleNa: { textDecorationLine: 'line-through', color: colors.grayText },
   tileSub: { fontSize: 12, color: colors.grayText, marginTop: 2, minHeight: 30 },
   progressWrap: { height: 6, backgroundColor: colors.offWhite, borderRadius: 3, marginTop: 8, overflow: 'hidden' },
   progressBar: { height: 6, backgroundColor: colors.green },

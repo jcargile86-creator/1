@@ -74,11 +74,29 @@ export default function SectionScreen({ route, navigation }: Props) {
       contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xl * 2 }}
       ListHeaderComponent={
         <View>
+          {inspection.sectionSkipped?.[sectionId] && (
+            <View style={styles.naBanner}>
+              <Text style={styles.naBannerText}>Section marked Not Applicable — excluded from guided capture</Text>
+            </View>
+          )}
           <Pressable
             style={styles.cameraBtn}
             onPress={() => navigation.navigate('Camera', { id, sectionId })}
           >
             <Text style={styles.cameraText}>📷 Start Camera for This Section</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.naBtn, inspection.sectionSkipped?.[sectionId] && styles.naBtnActive]}
+            onPress={() =>
+              void updateInspection(id, (d) => {
+                if (d.sectionSkipped[sectionId]) delete d.sectionSkipped[sectionId];
+                else d.sectionSkipped[sectionId] = true;
+              })
+            }
+          >
+            <Text style={[styles.naBtnText, inspection.sectionSkipped?.[sectionId] && { color: colors.white }]}>
+              {inspection.sectionSkipped?.[sectionId] ? '↩ Restore Section' : '⏭ Skip Entire Section (N/A)'}
+            </Text>
           </Pressable>
           {section.questions && section.questions.length > 0 && (
             <Pressable style={styles.qBtn} onPress={() => navigation.navigate('Questions', { id, sectionId })}>
@@ -158,6 +176,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   cameraBtn: { backgroundColor: colors.red, borderRadius: touch.radius, minHeight: touch.minHeight + 4, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   cameraText: { color: colors.white, fontSize: 18, fontWeight: '800' },
+  naBanner: { backgroundColor: colors.grayText, borderRadius: 10, padding: spacing.sm, marginBottom: spacing.sm },
+  naBannerText: { color: colors.white, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  naBtn: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.grayLine, borderRadius: touch.radius, minHeight: touch.minHeight - 8, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  naBtnActive: { backgroundColor: colors.grayText, borderColor: colors.grayText },
+  naBtnText: { color: colors.grayText, fontSize: 15, fontWeight: '800' },
   qBtn: { backgroundColor: colors.navy, borderRadius: touch.radius, minHeight: touch.minHeight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   qText: { color: colors.white, fontSize: 16, fontWeight: '700' },
   groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.sm },
