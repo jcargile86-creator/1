@@ -15,7 +15,8 @@ on:
       - '.github/workflows/eas-update.yml'
 
 env:
-  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  # Expo access token — the user's repo stores it under the name INSPECTIONAPP
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN || secrets.INSPECTIONAPP }}
 
 jobs:
   update:
