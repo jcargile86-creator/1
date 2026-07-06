@@ -21,7 +21,7 @@ import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
 import { buildQueue, firstPendingIndex, isDone, nextSectionIndex } from '../flows/queue';
-import { persistPhoto } from '../store/photos';
+import { persistPhoto, persistPreview } from '../store/photos';
 import { colors, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
@@ -137,17 +137,21 @@ export default function CameraScreen({ route, navigation }: Props) {
     setPending({ photoId, uri: null, stay });
     // Instant preview: grab the live viewfinder frame (~ms) so the caption
     // card never waits on the full-resolution photo's disk write + decode.
-    void (async () => {
+    // The snapshot is kept as the photo's lightweight preview (thumbnails +
+    // PDF embedding at print-friendly size).
+    const snapTask: Promise<string | null> = (async () => {
       try {
         const snap = await cameraRef.current?.takeSnapshot({ quality: 70 });
         if (snap?.path) {
-          const snapUri = toFileUri(snap.path);
+          const snapUri = persistPreview(toFileUri(snap.path), inspection.id, photoId);
           setPending((p) => (p && p.photoId === photoId && !p.uri ? { ...p, uri: snapUri } : p));
           setLastThumb(snapUri);
+          return snapUri;
         }
       } catch {
         // full photo below becomes the preview fallback
       }
+      return null;
     })();
     captureTask.current = (async () => {
       try {
@@ -157,10 +161,12 @@ export default function CameraScreen({ route, navigation }: Props) {
         // Keep showing the lightweight snapshot; only use the full-res file
         // as preview if the snapshot failed.
         setPending((p) => (p && p.photoId === photoId && !p.uri ? { ...p, uri } : p));
+        const previewUri = (await snapTask) ?? undefined;
         await updateInspection(inspection.id, (d) => {
           d.photos.push({
             id: photoId,
             uri,
+            previewUri,
             sectionId: shot.sectionId,
             promptId: shot.prompt.id,
             instance: shot.instance,

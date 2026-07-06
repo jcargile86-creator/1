@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { Paths } from 'expo-file-system';
 import { Inspection, ClaimInfo } from '../types';
 import { DEFAULT_FLOW_ID, getFlow } from '../flows';
 
@@ -22,6 +23,26 @@ function newId(): string {
   return Crypto.randomUUID();
 }
 
+/** iOS rotates the app container path on every install/update, breaking
+ *  stored absolute file URIs. Rebase anything under Documents onto the
+ *  current container. */
+function rebaseUri<T extends string | undefined>(uri: T): T {
+  if (!uri) return uri;
+  const marker = '/Documents/';
+  const i = uri.indexOf(marker);
+  if (i === -1) return uri;
+  const base = Paths.document.uri.endsWith('/') ? Paths.document.uri : `${Paths.document.uri}/`;
+  return (base + uri.slice(i + marker.length)) as T;
+}
+
+function rebaseInspection(x: Inspection): Inspection {
+  return {
+    ...x,
+    photos: x.photos.map((p) => ({ ...p, uri: rebaseUri(p.uri), previewUri: rebaseUri(p.previewUri) })),
+    documents: (x.documents ?? []).map((d) => ({ ...d, uri: rebaseUri(d.uri) })),
+  };
+}
+
 export function InspectionProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<Inspection[]>([]);
@@ -36,7 +57,7 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
           .map(([, v]) => (v ? (JSON.parse(v) as Inspection) : null))
           .filter((x): x is Inspection => !!x)
           // migrate records saved before newer fields existed
-          .map((x) => ({ ...x, sectionSkipped: x.sectionSkipped ?? {}, documents: x.documents ?? [] }))
+          .map((x) => rebaseInspection({ ...x, sectionSkipped: x.sectionSkipped ?? {}, documents: x.documents ?? [] }))
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         setInspections(items);
       } finally {

@@ -11,20 +11,25 @@ import { buildReportHtml, PhotoSource } from './html';
  */
 export async function generateReport(inspection: Inspection, flow: FlowDef): Promise<string> {
   // expo-print renders local file URIs unreliably across platforms — embed
-  // photos as base64 data URIs instead.
+  // photos as base64 data URIs. Prefer the screen-res preview snapshot:
+  // it's print-sized, keeping the report HTML small enough to render.
   const cache = new Map<string, string>();
   const src: PhotoSource = {
     resolve: (photo: PhotoRecord) => {
       const hit = cache.get(photo.id);
       if (hit) return hit;
-      try {
-        const b64 = new File(photo.uri).base64();
-        const uri = `data:image/jpeg;base64,${b64}`;
-        cache.set(photo.id, uri);
-        return uri;
-      } catch {
-        return photo.uri; // fall back to the file URI
+      for (const candidate of [photo.previewUri, photo.uri]) {
+        if (!candidate) continue;
+        try {
+          const b64 = new File(candidate).base64Sync();
+          const uri = `data:image/jpeg;base64,${b64}`;
+          cache.set(photo.id, uri);
+          return uri;
+        } catch {
+          // try the next candidate
+        }
       }
+      return photo.uri;
     },
   };
 

@@ -15,6 +15,7 @@ import PhotoReviewScreen from './src/screens/PhotoReviewScreen';
 import QuestionsScreen from './src/screens/QuestionsScreen';
 import SketchScreen from './src/screens/SketchScreen';
 import DocumentsScreen from './src/screens/DocumentsScreen';
+import GalleryScreen from './src/screens/GalleryScreen';
 import { RootStackParamList } from './src/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -63,6 +64,7 @@ export default function App() {
             <Stack.Screen name="Questions" component={QuestionsScreen} options={{ title: 'Questions' }} />
             <Stack.Screen name="Sketch" component={SketchScreen} options={{ title: 'Diagram' }} />
             <Stack.Screen name="Documents" component={DocumentsScreen} options={{ title: 'Documents' }} />
+            <Stack.Screen name="Gallery" component={GalleryScreen} options={{ title: 'Photo Review' }} />
           </Stack.Navigator>
         </NavigationContainer>
       </InspectionProvider>

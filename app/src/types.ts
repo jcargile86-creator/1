@@ -17,6 +17,8 @@ export interface PhotoRecord {
   id: string;
   /** file:// URI inside the app's document directory */
   uri: string;
+  /** Screen-res snapshot of the same shot — fast thumbnails + PDF embedding. */
+  previewUri?: string;
   sectionId: string;
   promptId?: string;
   instance?: string;

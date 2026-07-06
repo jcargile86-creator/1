@@ -8,4 +8,5 @@ export type RootStackParamList = {
   Questions: { id: string; sectionId: string; instance?: string };
   Sketch: { id: string; sketchId?: string };
   Documents: { id: string };
+  Gallery: { id: string };
 };

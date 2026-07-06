@@ -265,6 +265,9 @@ export default function InspectionScreen({ route, navigation }: Props) {
 
         {area === 'wrapup' && (
           <View style={{ marginTop: spacing.md }}>
+            <Pressable style={[styles.reportBtn, styles.docsBtn]} onPress={() => navigation.navigate('Gallery', { id })}>
+              <Text style={[styles.reportText, { color: colors.navy }]}>Photo Review ({inspection.photos.length})</Text>
+            </Pressable>
             <Pressable style={styles.reportBtn} onPress={makeReport} disabled={busy}>
               {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.reportText}>Generate PDF Inspection Report</Text>}
             </Pressable>
