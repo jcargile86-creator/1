@@ -201,6 +201,12 @@ export default function InspectionScreen({ route, navigation }: Props) {
             <PromptChecklist
               items={items}
               inspection={inspection}
+              section={section}
+              onAnswer={(questionId, value, instance) =>
+                void updateInspection(id, (d) => {
+                  d.answers[answerKey(entry.sectionId, questionId, instance)] = value;
+                })
+              }
               onOpen={(item) => {
                 const hasPhotos = inspection.photos.some(
                   (p) => p.sectionId === item.sectionId && p.promptId === item.prompt.id && p.instance === item.instance,
