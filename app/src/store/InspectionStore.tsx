@@ -35,8 +35,8 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
         const items = rows
           .map(([, v]) => (v ? (JSON.parse(v) as Inspection) : null))
           .filter((x): x is Inspection => !!x)
-          // migrate records saved before sectionSkipped existed
-          .map((x) => ({ ...x, sectionSkipped: x.sectionSkipped ?? {} }))
+          // migrate records saved before newer fields existed
+          .map((x) => ({ ...x, sectionSkipped: x.sectionSkipped ?? {}, documents: x.documents ?? [] }))
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         setInspections(items);
       } finally {
@@ -70,6 +70,7 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
         skipped: {},
         sectionSkipped: {},
         sketches: [],
+        documents: [],
       };
       await AsyncStorage.setItem(itemKey(insp.id), JSON.stringify(insp));
       setInspections((prev) => {

@@ -203,6 +203,26 @@ function interiorPages(insp: Inspection, flow: FlowDef, startPage: number): { ht
   return { html: chunks.join(''), nextPage: pageNo };
 }
 
+function documentPages(insp: Inspection, src: PhotoSource, startPage: number): { html: string; nextPage: number } {
+  const imageDocs = insp.documents.filter((d) => d.mimeType.startsWith('image/'));
+  const otherDocs = insp.documents.filter((d) => !d.mimeType.startsWith('image/'));
+  if (!imageDocs.length && !otherDocs.length) return { html: '', nextPage: startPage };
+  let pageNo = startPage;
+  const chunks: string[] = [];
+  for (const doc of imageDocs) {
+    const uri = src.resolve({ id: doc.id, uri: doc.uri, caption: doc.name, sectionId: 'documents', takenAt: doc.addedAt });
+    chunks.push(page(insp, pageNo, `<h2>DOCUMENT — ${esc(doc.name)}</h2><img class="docimg" src="${uri}"/>`));
+    pageNo += 1;
+  }
+  if (otherDocs.length) {
+    const body = `<h2>ADDITIONAL DOCUMENTS (attached to claim export)</h2>
+      <table class="qtable">${otherDocs.map((d) => `<tr><td>${esc(d.name)}</td><td class="ans">${esc(d.mimeType)}</td></tr>`).join('')}</table>`;
+    chunks.push(page(insp, pageNo, body));
+    pageNo += 1;
+  }
+  return { html: chunks.join(''), nextPage: pageNo };
+}
+
 function sketchPages(insp: Inspection, startPage: number): { html: string; nextPage: number } {
   if (!insp.sketches.length) return { html: '', nextPage: startPage };
   let pageNo = startPage;
@@ -291,13 +311,15 @@ export function buildReportHtml(insp: Inspection, flow: FlowDef, src: PhotoSourc
   pageNo = interior.nextPage;
   const sketches = sketchPages(insp, pageNo);
   pageNo = sketches.nextPage;
+  const documents = documentPages(insp, src, pageNo);
+  pageNo = documents.nextPage;
   const photos = photoPages(insp, flow, src, pageNo);
   pageNo = photos.nextPage;
   const closing = closingPage(insp, pageNo);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${css()}</style></head><body>
     ${coverPage(insp, coverPhoto ? src.resolve(coverPhoto) : null)}
-    ${summary}${roof}${questions}${interior.html}${sketches.html}${photos.html}${closing}
+    ${summary}${roof}${questions}${interior.html}${sketches.html}${documents.html}${photos.html}${closing}
   </body></html>`;
 }
 
@@ -348,6 +370,7 @@ function css(): string {
   .photo-label { flex:1; font-size:11px; padding-top:130px; }
   .photo-label .sub { color:#555; font-size:10px; }
   .sketch { width:58%; display:block; margin: 8px auto; }
+  .docimg { max-width:100%; max-height:600px; display:block; margin: 8px auto; object-fit:contain; }
   .closing { text-align:center; margin-top:60px; font-size:12px; line-height:1.7; }
   .closing .office { margin-top:18px; }
   .phoneband { background:${navy}; color:#fff; padding:4px; width:60%; margin:8px auto; font-size:10px; }

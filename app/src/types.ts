@@ -25,6 +25,15 @@ export interface PhotoRecord {
   takenAt: string; // ISO
 }
 
+export interface DocumentRecord {
+  id: string;
+  /** file:// URI inside the app's document directory */
+  uri: string;
+  name: string;
+  mimeType: string;
+  addedAt: string; // ISO
+}
+
 export interface SketchRecord {
   id: string;
   name: string;
@@ -53,6 +62,8 @@ export interface Inspection {
   /** whole sections marked Not Applicable (e.g. Interior on an exterior-only claim) */
   sectionSkipped: Record<string, boolean>;
   sketches: SketchRecord[];
+  /** uploaded documents: Sketch AR screenshots, CAD markups, receipts... */
+  documents: DocumentRecord[];
 }
 
 /** Sketch canvas coordinate space — sketches are stored normalized to this. */

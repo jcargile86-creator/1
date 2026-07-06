@@ -284,8 +284,8 @@ export default function InspectionScreen({ route, navigation }: Props) {
             <Pressable style={styles.reportBtn} onPress={makeReport} disabled={busy}>
               {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.reportText}>Generate PDF Inspection Report</Text>}
             </Pressable>
-            <Pressable style={[styles.reportBtn, styles.sketchBtn]} onPress={() => navigation.navigate('Sketch', { id })}>
-              <Text style={[styles.reportText, { color: colors.navy }]}>Add Diagram / Sketch ({inspection.sketches.length})</Text>
+            <Pressable style={[styles.reportBtn, styles.sketchBtn]} onPress={() => navigation.navigate('Documents', { id })}>
+              <Text style={[styles.reportText, { color: colors.navy }]}>Documents ({inspection.documents.length})</Text>
             </Pressable>
           </View>
         )}

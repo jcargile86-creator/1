@@ -39,6 +39,15 @@ export function toXactPayload(insp: Inspection, flow: FlowDef, reportPdfUri?: st
     description: p.caption,
     takenAt: p.takenAt,
   }));
+  for (const doc of insp.documents) {
+    attachments.push({
+      uri: doc.uri,
+      fileName: doc.name,
+      mimeType: doc.mimeType,
+      description: `Document: ${doc.name}`,
+      takenAt: doc.addedAt,
+    });
+  }
   if (reportPdfUri) {
     attachments.unshift({
       uri: reportPdfUri,

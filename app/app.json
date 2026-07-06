@@ -2,7 +2,7 @@
   "expo": {
     "name": "InspectPro",
     "slug": "inspectpro",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "runtimeVersion": { "policy": "appVersion" },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -34,6 +34,12 @@
         {
           "cameraPermissionText": "InspectPro uses the camera for guided inspection photo capture.",
           "enableMicrophonePermission": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "InspectPro attaches diagrams, Sketch AR screenshots, and CAD markups from your photo library to the claim package."
         }
       ]
     ]
