@@ -28,6 +28,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
 
 type FlashMode = 'off' | 'auto' | 'on';
 
+/** vision-camera returns bare paths; expo-file-system wants file:// URIs. */
+const toFileUri = (p: string) => (p.startsWith('file://') ? p : `file://${p}`);
+
 /** The 2–3 most likely ALDD condition terms for the shot being captioned. */
 function suggestTerms(sectionId: string, promptId?: string): string[] {
   switch (sectionId) {
@@ -139,7 +142,7 @@ export default function CameraScreen({ route, navigation }: Props) {
       try {
         const snap = await cameraRef.current?.takeSnapshot({ quality: 70 });
         if (snap?.path) {
-          const snapUri = `file://${snap.path}`;
+          const snapUri = toFileUri(snap.path);
           setPending((p) => (p && p.photoId === photoId && !p.uri ? { ...p, uri: snapUri } : p));
           setLastThumb(snapUri);
         }
@@ -151,7 +154,7 @@ export default function CameraScreen({ route, navigation }: Props) {
       try {
         const pic = await cameraRef.current?.takePhoto({ flash, enableShutterSound: false });
         if (!pic?.path) throw new Error('no photo');
-        const uri = persistPhoto(`file://${pic.path}`, inspection.id, photoId);
+        const uri = persistPhoto(toFileUri(pic.path), inspection.id, photoId);
         // Keep showing the lightweight snapshot; only use the full-res file
         // as preview if the snapshot failed.
         setPending((p) => (p && p.photoId === photoId && !p.uri ? { ...p, uri } : p));
@@ -168,8 +171,10 @@ export default function CameraScreen({ route, navigation }: Props) {
           delete d.skipped[shot.key];
         });
         return true;
-      } catch {
+      } catch (e) {
         setPending((p) => (p && p.photoId === photoId ? null : p));
+        // Never lose a shot silently in the field — surface the real error.
+        Alert.alert('Photo failed to save', String(e instanceof Error ? e.message : e));
         return false;
       }
     })();
@@ -268,6 +273,7 @@ export default function CameraScreen({ route, navigation }: Props) {
           format={format}
           isActive={isFocused}
           photo
+          video
           photoQualityBalance="speed"
           enableZoomGesture
         />
