@@ -36,6 +36,14 @@ export default function QuestionsScreen({ route, navigation }: Props) {
       d.answers[answerKey(sectionId, q.id, instance)] = v;
     });
 
+  /** Live photo count for auto-counting questions (e.g. vents per type). */
+  const autoCount = (q: QuestionDef): number | undefined => {
+    if (!q.autoFromPrompt) return undefined;
+    return inspection.photos.filter(
+      (p) => p.sectionId === sectionId && p.promptId === q.autoFromPrompt && p.instance === instance,
+    ).length;
+  };
+
   const noteKey = instance ? `${sectionId}:${instance}` : sectionId;
 
   return (
@@ -65,12 +73,21 @@ export default function QuestionsScreen({ route, navigation }: Props) {
                 </View>
               )}
               {(q.type === 'text' || q.type === 'number') && (
-                <TextInput
-                  style={styles.input}
-                  keyboardType={q.type === 'number' ? 'numeric' : 'default'}
-                  value={getVal(q) !== undefined ? String(getVal(q)) : ''}
-                  onChangeText={(t) => setVal(q, q.type === 'number' ? (t === '' ? '' : Number(t.replace(/[^0-9.\-]/g, '')) || 0) : t)}
-                />
+                <>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType={q.type === 'number' ? 'numeric' : 'default'}
+                    value={getVal(q) !== undefined ? String(getVal(q)) : autoCount(q) !== undefined && autoCount(q)! > 0 ? String(autoCount(q)) : ''}
+                    placeholder={autoCount(q) !== undefined ? String(autoCount(q)) : undefined}
+                    placeholderTextColor={colors.grayText}
+                    onChangeText={(t) => setVal(q, q.type === 'number' ? (t === '' ? '' : Number(t.replace(/[^0-9.\-]/g, '')) || 0) : t)}
+                  />
+                  {autoCount(q) !== undefined && (
+                    <Text style={styles.autoHint}>
+                      Auto-counted from photos taken: {autoCount(q)}{getVal(q) !== undefined ? ' (overridden)' : ''}
+                    </Text>
+                  )}
+                </>
               )}
               {q.type === 'multilineText' && (
                 <TextInput
@@ -113,5 +130,6 @@ const styles = StyleSheet.create({
   choiceText: { fontSize: 14, fontWeight: '700', color: colors.ink },
   choiceTextActive: { color: colors.white },
   input: { backgroundColor: colors.offWhite, borderRadius: 10, borderWidth: 1, borderColor: colors.grayLine, paddingHorizontal: spacing.md, minHeight: touch.minHeight - 8, fontSize: 16, color: colors.ink },
+  autoHint: { fontSize: 11, color: colors.grayText, marginTop: 4, fontWeight: '600' },
   multiline: { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.sm, backgroundColor: colors.white },
 });

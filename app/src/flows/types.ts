@@ -15,6 +15,9 @@ export interface QuestionDef {
   choices?: string[];
   /** Group heading in the questions screen and the PDF (e.g. "Subrogation Opportunities"). */
   group?: string;
+  /** For number questions: default the value to the count of photos taken on
+   *  this prompt (same section/instance). Inspector edits to override. */
+  autoFromPrompt?: string;
 }
 
 export interface PromptDef {
