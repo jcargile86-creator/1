@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -20,7 +21,7 @@ import * as Crypto from 'expo-crypto';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
-import { buildQueue, firstPendingIndex, isDone, nextSectionIndex } from '../flows/queue';
+import { buildQueue, firstPendingIndex, isDone, QueueItem } from '../flows/queue';
 import { persistPhoto, persistPreview } from '../store/photos';
 import { colors, spacing } from '../theme';
 
@@ -122,16 +123,31 @@ export default function CameraScreen({ route, navigation }: Props) {
   const inspection = getInspection(id);
   const flow = inspection ? getFlow(inspection.flowId) : undefined;
 
-  const queue = useMemo(
-    () => (inspection && flow ? buildQueue(flow, inspection, sectionId, instance) : []),
-    [flow, inspection?.instances, sectionId, instance],
-  );
+  // The camera always walks the WHOLE flow so finishing one section rolls
+  // straight into the next section's first photo; opening a specific section
+  // just sets the starting point. A section opened while marked N/A stays
+  // scoped to itself (the whole-flow queue excludes it).
+  const openedWhileSkipped = useRef(
+    sectionId ? inspection?.sectionSkipped?.[sectionId] === true : false,
+  ).current;
+  const queue = useMemo(() => {
+    if (!inspection || !flow) return [];
+    if (openedWhileSkipped && sectionId) return buildQueue(flow, inspection, sectionId, instance);
+    return buildQueue(flow, inspection);
+  }, [flow, inspection, sectionId, instance, openedWhileSkipped]);
 
   const initialIndex = useMemo(() => {
     if (!inspection) return 0;
     if (startKey) {
       const i = queue.findIndex((q) => q.key === startKey);
       if (i !== -1) return i;
+    }
+    if (sectionId) {
+      const inSection = (q: QueueItem) => q.sectionId === sectionId && (instance === undefined || q.instance === instance);
+      const pend = queue.findIndex((q) => inSection(q) && !isDone(inspection, q.key));
+      if (pend !== -1) return pend;
+      const first = queue.findIndex(inSection);
+      if (first !== -1) return first;
     }
     return firstPendingIndex(queue, inspection);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -150,6 +166,34 @@ export default function CameraScreen({ route, navigation }: Props) {
   /** In-flight capture/save work — caption confirm/retake await this. */
   const captureTask = useRef<Promise<boolean> | null>(null);
 
+  const current = queue[index] as QueueItem | undefined;
+
+  /** Brief animated interstitial when capture crosses into a new section
+   *  (or a new elevation/slope instance) — then straight to its first shot. */
+  const [banner, setBanner] = useState<{ title: string; sub?: string } | null>(null);
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const lastBlockRef = useRef<string | null>(null);
+  useEffect(() => {
+    const block = current ? `${current.sectionId}|${current.instance ?? ''}` : null;
+    if (block && lastBlockRef.current && block !== lastBlockRef.current) {
+      setBanner({ title: current!.sectionTitle, sub: current!.instance });
+      bannerOpacity.setValue(0);
+      Animated.sequence([
+        Animated.timing(bannerOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.delay(850),
+        Animated.timing(bannerOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+      ]).start(({ finished }) => {
+        if (finished) setBanner(null);
+      });
+    }
+    if (block) lastBlockRef.current = block;
+  }, [current?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Past the last prompt there is no "done" screen — the camera closes. */
+  useEffect(() => {
+    if (queue.length > 0 && index >= queue.length && !pending) navigation.goBack();
+  }, [index, queue.length, pending, navigation]);
+
   if (!inspection || !flow) return null;
 
   if (!hasPermission) {
@@ -166,8 +210,6 @@ export default function CameraScreen({ route, navigation }: Props) {
     );
   }
 
-  const current = queue[index];
-  const finished = !current;
   const doneCount = queue.filter((q) => isDone(inspection, q.key)).length;
 
   const advance = () => setIndex((i) => Math.min(i + 1, queue.length));
@@ -308,12 +350,14 @@ export default function CameraScreen({ route, navigation }: Props) {
         text: 'Skip Section',
         style: 'destructive',
         onPress: () => {
+          const firstOfSection = queue.findIndex((q) => q.sectionId === current.sectionId);
           void updateInspection(inspection.id, (d) => {
             d.sectionSkipped[current.sectionId] = true;
           });
-          const next = nextSectionIndex(queue, index);
-          if (next >= queue.length && sectionId) navigation.goBack();
-          else setIndex(next);
+          // The rebuilt queue drops the skipped section, so this slot holds
+          // the next section's first prompt (or falls past the end → close).
+          if (openedWhileSkipped && sectionId) navigation.goBack();
+          else if (firstOfSection !== -1) setIndex(firstOfSection);
         },
       },
     ]);
@@ -350,9 +394,7 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.flashText}>{flash === 'on' ? 'FLASH ON' : flash === 'auto' ? 'FLASH AUTO' : 'FLASH OFF'}</Text>
           </Pressable>
         </View>
-        {finished ? (
-          <Text style={styles.label}>All prompts covered — add extra shots or exit</Text>
-        ) : (
+        {current ? (
           <>
             <View style={styles.tagRow}>
               <Text style={styles.sectionTag}>{current.sectionTitle}{current.instance ? ` · ${current.instance}` : ''}{isDone(inspection, current.key) ? ' · ✓ captured' : ''}</Text>
@@ -365,7 +407,7 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.label}>{current.label}</Text>
             {current.prompt.hint ? <Text style={styles.hint}>{current.prompt.hint}</Text> : null}
           </>
-        )}
+        ) : null}
       </View>
 
       {/* Bottom controls */}
@@ -375,24 +417,35 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.sideText}>‹ Back</Text>
           </Pressable>
 
-          <Pressable onPress={() => capture(false)} style={styles.shutter} disabled={finished || !!pending}>
+          <Pressable onPress={() => capture(false)} style={styles.shutter} disabled={!current || !!pending}>
             <View style={styles.shutterInner} />
           </Pressable>
 
-          <Pressable onPress={skip} style={styles.sideBtn} hitSlop={10} disabled={finished}>
+          <Pressable onPress={skip} style={styles.sideBtn} hitSlop={10} disabled={!current}>
             <Text style={styles.sideText}>Skip ›</Text>
           </Pressable>
         </View>
         <View style={styles.bottomRow2}>
           {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
-          <Pressable onPress={() => capture(true)} style={styles.extraBtn} disabled={finished || !!pending}>
+          <Pressable onPress={() => capture(true)} style={styles.extraBtn} disabled={!current || !!pending}>
             <Text style={styles.extraText}>Extra shot</Text>
           </Pressable>
-          <Pressable onPress={skipSection} style={styles.extraBtn} disabled={finished}>
+          <Pressable onPress={skipSection} style={styles.extraBtn} disabled={!current}>
             <Text style={styles.extraText}>N/A Section</Text>
           </Pressable>
         </View>
       </View>
+
+      {/* Section-change interstitial — fades in over the live camera and
+          right back out; shooting is never blocked. */}
+      {banner && (
+        <Animated.View pointerEvents="none" style={[styles.bannerWrap, { opacity: bannerOpacity }]}>
+          <View style={styles.bannerCard}>
+            <Text style={styles.bannerKicker}>UP NEXT</Text>
+            <Text style={styles.bannerTitle}>{banner.title}{banner.sub ? ` · ${banner.sub}` : ''}</Text>
+          </View>
+        </Animated.View>
+      )}
 
       {/* Caption review — full-screen photo with a slim caption bar. The
           keyboard only appears when the inspector taps the caption. */}
@@ -474,6 +527,10 @@ const styles = StyleSheet.create({
   lastThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)' },
   extraBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   extraText: { color: colors.white, fontSize: 14, fontWeight: '700' },
+  bannerWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  bannerCard: { backgroundColor: 'rgba(20,23,55,0.92)', borderRadius: 16, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center', maxWidth: '82%' },
+  bannerKicker: { color: '#9fa5d6', fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
+  bannerTitle: { color: colors.white, fontSize: 24, fontWeight: '800', marginTop: 4, textAlign: 'center' },
   captionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
   captionLoading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   captionBottomWrap: { flex: 1, justifyContent: 'flex-end' },
