@@ -66,6 +66,9 @@ Per elevation:
    gauge], steel/seamless steel, T1-11, hardboard 6/8/12" exposure, fiber cement, stucco)
 3. Damage close-ups: vinyl cracks/holes at bottom lip & midline; aluminum dents (use flash for
    shadowing); wood splits; fiber cement chips/fractures; stucco spalling — with scale reference
+3a. **Windows** (every elevation): screens/glazing/beading/wraps are hail collateral —
+   chalk + close-ups with measurements; record count + sizes for negative-space math (e.g. 2 @ 6x5)
+3b. **Doors**: faces, wraps, weather stripping; record sizes for negative space (e.g. 3x7)
 4. House wrap exposed (if observed)
 5. Foam insulation exposed (if observed)
 6. Painted trim — linear feet; painted window trim — count of windows
@@ -139,6 +142,19 @@ matching-state questions (age range, uniform appearance), tarp documentation (be
 after, size, cap nails, shingles affected), prior repairs distribution, additional structures
 (area prefix in every label, e.g. `Shed`), notes + diagrams (hand sketch / Free Form style),
 Sketch AR summary screenshots → documents.
+
+## Transcript audit additions (2026-07-06)
+Second pass over the transcripts added: per-elevation windows & doors (counts, sizes,
+damaged-of-total, negative-space sqft); per-slope ventilation counts (pipe jacks, box/turtle,
+turbines, power, exhaust/furnace w/ pipe size, rain diverters) matching the report's collateral
+count column; roof-side cornice return counts (only when the slope has findings); step/14"
+transition flashing; decking type (1/2" OSB, 1/2" CDX, 1x6 T&G, 1x6 skip) + affected sqft with
+rot-vs-storm language; flat-roof documentation (4-direction overviews, material ID, 6+ condition
+photos, overlaps, per-penetration); contractor-markings protocol in test squares (different
+chalk color, assessment in parentheses, hail hit only if inspector agrees); the Allstate
+zippering exclusion; drip edge vs gutter apron as a recorded answer; gutter protection grade.
+Attic documentation: add a Room named "Attic" in the Inside tab (overviews from entry F/L/B/R,
+water intrusion + source w/ measurements, walk only supported decking).
 
 ## Report assembly (see report-template-structure.md)
 Photos flow into two-per-page timestamped photo sheets in capture order; structured data fills
