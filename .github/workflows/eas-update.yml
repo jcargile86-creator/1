@@ -143,6 +143,7 @@ jobs:
       - name: List recent builds
         working-directory: app
         run: |
+          eas init --force --non-interactive
           eas build:list --platform ios --limit 3 --non-interactive || true
 
   # Submit an ALREADY-BUILT binary to TestFlight without spending a new build.
