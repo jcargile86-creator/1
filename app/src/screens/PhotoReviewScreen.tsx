@@ -6,7 +6,8 @@ import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
 import { resolveLabel } from '../flows/queue';
-import { promptKey } from '../types';
+import { promptKey, answerKey } from '../types';
+import QuestionFields from '../components/QuestionFields';
 import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PhotoReview'>;
@@ -33,6 +34,11 @@ export default function PhotoReviewScreen({ route, navigation }: Props) {
 
   const photos = inspection.photos.filter(
     (p) => p.sectionId === sectionId && p.promptId === promptId && p.instance === instance,
+  );
+
+  /** Questions attached to this specific item — data entry lives here. */
+  const itemQuestions = (instance ? section?.instanceQuestions ?? [] : section?.questions ?? []).filter(
+    (q) => q.promptId === promptId,
   );
 
   const saveCaption = (photoId: string) => {
@@ -69,6 +75,22 @@ export default function PhotoReviewScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: 120 }}>
         {prompt?.hint ? <Text style={styles.hint}>{prompt.hint}</Text> : null}
         {photos.length === 0 && <Text style={styles.empty}>No photos yet for this item.</Text>}
+        {itemQuestions.length > 0 && (
+          <View style={{ marginBottom: spacing.sm }}>
+            <QuestionFields
+              inspection={inspection}
+              sectionId={sectionId}
+              instance={instance}
+              questions={itemQuestions}
+              hideGroups
+              onAnswer={(qid, v) =>
+                void updateInspection(id, (d) => {
+                  d.answers[answerKey(sectionId, qid, instance)] = v;
+                })
+              }
+            />
+          </View>
+        )}
         {photos.map((p) => (
           <View key={p.id} style={styles.card}>
             <Image source={{ uri: p.uri }} style={styles.photo} />

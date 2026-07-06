@@ -31,28 +31,68 @@ type FlashMode = 'off' | 'auto' | 'on';
 /** vision-camera returns bare paths; expo-file-system wants file:// URIs. */
 const toFileUri = (p: string) => (p.startsWith('file://') ? p : `file://${p}`);
 
-/** The 2–3 most likely ALDD condition terms for the shot being captioned. */
+/** Caption chips tuned to the exact shot being captioned. Prompt-specific
+ *  first; section defaults as fallback. Roof shots always offer
+ *  "Contractor Marking". */
+const PROMPT_TERMS: Record<string, string[]> = {
+  // elevations
+  'siding-damage': ['Potential Hail', 'Potential Wind', 'Potential Mechanical'],
+  windows: ['Potential Hail', 'Spatter Present', 'Clean'],
+  doors: ['Potential Hail', 'Spatter Present', 'Clean'],
+  collateral: ['Clean', 'Spatter Present'],
+  'dryer-vent': ['Potential Hail', 'Painted', 'Clean'],
+  'gable-vent': ['Potential Hail', 'Painted', 'Clean'],
+  'cornice-returns': ['Potential Hail', 'Clean'],
+  gutters: ['Potential Hail', 'Painted', 'Clean'],
+  downspouts: ['Potential Hail', 'Painted', 'Clean'],
+  // roof eave
+  'drip-edge': ['Painted', 'Potential Hail'],
+  'gutter-topside': ['Potential Hail', 'No Potential Hail'],
+  'gutter-protection': ['Potential Hail', 'Painted'],
+  // roof overview
+  valley: ['Potential Hail', 'Contractor Marking'],
+  'hip-ridge': ['Potential Hail', 'Potential Wind', 'Contractor Marking'],
+  'ridge-vent': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  flashing: ['Potential Hail', 'Painted', 'Contractor Marking'],
+  chimney: ['Potential Hail', 'Painted', 'Contractor Marking'],
+  skylights: ['Potential Hail', 'Contractor Marking'],
+  decking: ['Wood Rot', 'Storm Damage'],
+  'flat-roof': ['Prior Repair', 'Ponding', 'Potential Hail'],
+  satellite: ['Spatter Present', 'Clean'],
+  // per-slope vents: hail dents + painted — never granule loss
+  'pipe-jacks': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  'box-vents': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  turbines: ['Potential Hail', 'Painted', 'Contractor Marking'],
+  'power-vents': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  'furnace-vents': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  'exhaust-caps': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  'rain-diverters': ['Potential Hail', 'Painted', 'Contractor Marking'],
+  // test squares
+  'ts-conditions': ['Potential Hail', 'Granule Loss', 'Contractor Marking'],
+  'contractor-markings': ['Contractor Marking', 'Potential Blister', 'Potential Mechanical'],
+  // wind & tree
+  'wind-detail': ['Potential Wind', 'Potential Mechanical', 'Contractor Marking'],
+  'wind-hip-ridge': ['Potential Wind', 'Contractor Marking'],
+  'tree-impact': ['Tree Impact', 'Potential Wind'],
+  // interior & wrap-up
+  'room-damage': ['Potential Leak', 'Water Stain'],
+  'prior-repairs': ['Prior Repair'],
+};
+
+const SECTION_TERMS: Record<string, string[]> = {
+  wind: ['Potential Wind', 'Contractor Marking'],
+  'test-squares': ['Potential Hail', 'Granule Loss', 'Contractor Marking'],
+  interior: ['Potential Leak', 'Water Stain'],
+  'roof-eave': [],
+  'roof-overview': ['Potential Hail', 'Contractor Marking'],
+  elevations: ['Potential Hail', 'Potential Wind'],
+  arrival: [],
+  wrapup: [],
+};
+
 function suggestTerms(sectionId: string, promptId?: string): string[] {
-  switch (sectionId) {
-    case 'wind':
-      return ['Potential Wind', 'Potential Mechanical'];
-    case 'test-squares':
-      return ['Potential Hail', 'Granule Loss'];
-    case 'interior':
-      return ['Potential Leak', 'Water Stain'];
-    case 'roof-eave':
-      return ['Potential Hail', 'No Potential Hail', 'Painted'];
-    case 'roof-overview':
-      return ['Potential Hail', 'Painted', 'Clean'];
-    case 'elevations':
-      return promptId === 'collateral'
-        ? ['Clean', 'Spatter Present']
-        : ['Potential Hail', 'Potential Wind', 'Potential Mechanical'];
-    case 'wrapup':
-      return ['Prior Repair', 'Potential Wind'];
-    default:
-      return ['Potential Hail', 'Potential Wind'];
-  }
+  if (promptId && PROMPT_TERMS[promptId]) return PROMPT_TERMS[promptId];
+  return SECTION_TERMS[sectionId] ?? [];
 }
 
 interface PendingPhoto {
@@ -249,6 +289,11 @@ export default function CameraScreen({ route, navigation }: Props) {
   /** One-tap category skip: mark the current section N/A and jump past it. */
   const skipSection = () => {
     if (!current) return;
+    const sectionDef = flow.sections.find((s) => s.id === current.sectionId);
+    if (sectionDef?.skippable === false) {
+      Alert.alert('Always required', `${current.sectionTitle} applies to every claim and can’t be skipped.`);
+      return;
+    }
     Alert.alert(`Skip "${current.sectionTitle}"?`, 'Marks the whole section Not Applicable. You can restore it from the section menu.', [
       { text: 'Cancel', style: 'cancel' },
       {

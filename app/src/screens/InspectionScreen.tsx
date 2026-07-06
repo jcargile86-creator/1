@@ -146,7 +146,9 @@ export default function InspectionScreen({ route, navigation }: Props) {
     const complete = required.length > 0 && reqDone >= required.length;
     const open = isExpanded(entry.key);
 
-    const questions: QuestionDef[] = entry.instance ? section.instanceQuestions ?? [] : section.questions ?? [];
+    const questions: QuestionDef[] = (entry.instance ? section.instanceQuestions ?? [] : section.questions ?? []).filter(
+      (q) => !q.promptId,
+    );
     const answered = questions.filter((q) => {
       const v = inspection.answers[answerKey(section.id, q.id, entry.instance)];
       return v !== undefined && v !== '';
@@ -174,9 +176,11 @@ export default function InspectionScreen({ route, navigation }: Props) {
               >
                 <Text style={styles.actionText}>Shoot</Text>
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.naBtn]} onPress={() => toggleNa(entry.sectionId, section.title)}>
-                <Text style={[styles.actionText, { color: colors.grayText }]}>{na ? 'Restore' : 'N/A'}</Text>
-              </Pressable>
+              {section.skippable !== false && (
+                <Pressable style={[styles.actionBtn, styles.naBtn]} onPress={() => toggleNa(entry.sectionId, section.title)}>
+                  <Text style={[styles.actionText, { color: colors.grayText }]}>{na ? 'Restore' : 'N/A'}</Text>
+                </Pressable>
+              )}
             </View>
 
             {questions.length > 0 && (

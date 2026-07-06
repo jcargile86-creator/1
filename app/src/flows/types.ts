@@ -18,6 +18,9 @@ export interface QuestionDef {
   /** For number questions: default the value to the count of photos taken on
    *  this prompt (same section/instance). Inspector edits to override. */
   autoFromPrompt?: string;
+  /** Attach this question to a specific photo prompt — it renders alongside
+   *  that item in the capture flow instead of the section's question list. */
+  promptId?: string;
 }
 
 export interface PromptDef {
@@ -51,6 +54,8 @@ export interface SectionDef {
   subtitle?: string;
   /** Which top tab this section belongs to (defaults to 'wrapup'). */
   area?: AreaTab;
+  /** False = the section can never be marked N/A (e.g. Arrival). */
+  skippable?: boolean;
   /** When set, the section's prompts/questions run once per instance. */
   repeat?: RepeatDef;
   prompts: PromptDef[];
