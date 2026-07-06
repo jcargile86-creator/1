@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import * as Updates from 'expo-updates';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -23,6 +24,23 @@ const theme = {
 };
 
 export default function App() {
+  // Self-updating: check on launch, download, and restart into the new
+  // version immediately — no force-quit ritual. No-ops in development.
+  useEffect(() => {
+    void (async () => {
+      try {
+        if (!Updates.isEnabled) return;
+        const check = await Updates.checkForUpdateAsync();
+        if (check.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {
+        // offline or update server unreachable — run what we have
+      }
+    })();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <InspectionProvider>
