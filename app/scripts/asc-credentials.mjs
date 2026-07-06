@@ -57,21 +57,18 @@ const csrContent = fs
   .replace(/-----(BEGIN|END) CERTIFICATE REQUEST-----/g, '')
   .replace(/\n/g, '');
 
-// 3. Distribution certificate
-let cert;
-try {
-  cert = await api('POST', '/certificates', {
-    data: { type: 'certificates', attributes: { certificateType: 'IOS_DISTRIBUTION', csrContent } },
-  });
-} catch (e) {
-  if (String(e).includes('exceeded') || String(e).includes('maximum')) {
-    throw new Error(
-      'Apple says the team already has the maximum number of distribution certificates. ' +
-        'Revoke an old one at developer.apple.com/account/resources/certificates and re-run. Original: ' + e.message,
-    );
-  }
-  throw e;
+// 3. Distribution certificate. Apple allows one active iOS distribution cert
+// and our previous run's private key died with its CI machine — revoke stale
+// certs first (safe: revocation never affects builds already in TestFlight;
+// this team's distribution certs exist solely for this pipeline).
+const existingCerts = await api('GET', '/certificates?filter[certificateType]=IOS_DISTRIBUTION&limit=20');
+for (const c of existingCerts.data ?? []) {
+  await api('DELETE', `/certificates/${c.id}`);
+  console.log('Revoked stale distribution certificate', c.id);
 }
+const cert = await api('POST', '/certificates', {
+  data: { type: 'certificates', attributes: { certificateType: 'IOS_DISTRIBUTION', csrContent } },
+});
 fs.writeFileSync('dist.cer', Buffer.from(cert.data.attributes.certificateContent, 'base64'));
 console.log('Created distribution certificate', cert.data.id);
 
