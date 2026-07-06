@@ -11,6 +11,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Camera, useCameraDevice, useCameraFormat, useCameraPermission } from 'react-native-vision-camera';
 import { File } from 'expo-file-system';
@@ -168,25 +169,64 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   const current = queue[index] as QueueItem | undefined;
 
+  /** A detour = "saw something, shot it, come right back". Chip taps and
+   *  banner taps jump elsewhere in the queue; confirming the shot returns
+   *  to `returnTo` (after walking any queued missed shots first). */
+  const [detour, setDetour] = useState<{ returnTo: number; nextKeys: string[] } | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const suppressBannerRef = useRef(false);
+
+  /** Jump that crosses into another section/instance shouldn't replay the
+   *  UP NEXT interstitial — that's for forward walking progress only. */
+  const jumpTo = (idx: number) => {
+    const t = queue[idx];
+    if (t && current && (t.sectionId !== current.sectionId || t.instance !== current.instance)) {
+      suppressBannerRef.current = true;
+    }
+    setIndex(idx);
+  };
+
   /** Brief animated interstitial when capture crosses into a new section
-   *  (or a new elevation/slope instance) — then straight to its first shot. */
-  const [banner, setBanner] = useState<{ title: string; sub?: string } | null>(null);
+   *  (or a new elevation/slope instance) — then straight to its first shot.
+   *  Lists anything in the block just left that never got a photo; tapping
+   *  detours back to grab those shots. */
+  const [banner, setBanner] = useState<{ title: string; sub?: string; missedKeys: string[]; missedLabel: string } | null>(null);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const bannerAnim = useRef<Animated.CompositeAnimation | null>(null);
   const lastBlockRef = useRef<string | null>(null);
   useEffect(() => {
     const block = current ? `${current.sectionId}|${current.instance ?? ''}` : null;
-    if (block && lastBlockRef.current && block !== lastBlockRef.current) {
-      setBanner({ title: current!.sectionTitle, sub: current!.instance });
-      bannerOpacity.setValue(0);
-      Animated.sequence([
-        Animated.timing(bannerOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.delay(850),
-        Animated.timing(bannerOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) setBanner(null);
-      });
-    }
+    const prev = lastBlockRef.current;
     if (block) lastBlockRef.current = block;
+    if (!block || !prev || block === prev) return;
+    if (suppressBannerRef.current) {
+      suppressBannerRef.current = false;
+      return;
+    }
+    const [prevSection, prevInstance] = prev.split('|');
+    const missed = queue.filter(
+      (q) =>
+        q.sectionId === prevSection &&
+        (q.instance ?? '') === prevInstance &&
+        !inspection?.photos.some((ph) => ph.sectionId === q.sectionId && ph.promptId === q.prompt.id && ph.instance === q.instance),
+    );
+    const names = missed.slice(0, 3).map((q) => q.label).join(', ');
+    setBanner({
+      title: current!.sectionTitle,
+      sub: current!.instance,
+      missedKeys: missed.map((q) => q.key),
+      missedLabel: missed.length > 3 ? `${names} +${missed.length - 3}` : names,
+    });
+    bannerOpacity.setValue(0);
+    bannerAnim.current?.stop();
+    bannerAnim.current = Animated.sequence([
+      Animated.timing(bannerOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(missed.length ? 2600 : 850),
+      Animated.timing(bannerOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]);
+    bannerAnim.current.start(({ finished }) => {
+      if (finished) setBanner(null);
+    });
   }, [current?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Past the last prompt there is no "done" screen — the camera closes. */
@@ -212,7 +252,56 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   const doneCount = queue.filter((q) => isDone(inspection, q.key)).length;
 
+  const hasPhoto = (q: QueueItem) =>
+    inspection.photos.some((ph) => ph.sectionId === q.sectionId && ph.promptId === q.prompt.id && ph.instance === q.instance);
+
+  /** Quick-grab chips: the sometimes-there items of the block you're
+   *  standing in — tap when you see one, shoot, and return automatically. */
+  const quickChips = current
+    ? queue.filter(
+        (q) => q.sectionId === current.sectionId && q.instance === current.instance && q.prompt.optional && q.key !== current.key,
+      )
+    : [];
+
+  const startDetour = (key: string) => {
+    const idx = queue.findIndex((q) => q.key === key);
+    if (idx === -1 || idx === index) return;
+    setDetour((d) => d ?? { returnTo: index, nextKeys: [] });
+    jumpTo(idx);
+  };
+
+  /** Tap on the banner's "not shot" line: walk the missed items as one
+   *  detour chain, then come back to where the walk had progressed to. */
+  const reviewMissed = () => {
+    if (!banner || banner.missedKeys.length === 0) return;
+    bannerAnim.current?.stop();
+    setBanner(null);
+    const [first, ...rest] = banner.missedKeys;
+    const idx = queue.findIndex((q) => q.key === first);
+    if (idx === -1) return;
+    setDetour({ returnTo: index, nextKeys: rest });
+    jumpTo(idx);
+  };
+
   const advance = () => setIndex((i) => Math.min(i + 1, queue.length));
+
+  /** Move on after a shot/skip: continue a detour chain, return from a
+   *  detour, or just advance down the walk. */
+  const advanceOrReturn = () => {
+    if (!detour) {
+      advance();
+      return;
+    }
+    const [nextKey, ...rest] = detour.nextKeys;
+    const idx = nextKey ? queue.findIndex((q) => q.key === nextKey) : -1;
+    if (idx !== -1) {
+      setDetour({ ...detour, nextKeys: rest });
+      jumpTo(idx);
+    } else {
+      jumpTo(Math.min(detour.returnTo, queue.length));
+      setDetour(null);
+    }
+  };
 
   /** Shutter tap: the caption card opens INSTANTLY with the smart default;
    *  the photo is captured, processed, and saved in the background. */
@@ -284,7 +373,7 @@ export default function CameraScreen({ route, navigation }: Props) {
     const task = captureTask.current;
     setPending(null);
     setCaption('');
-    if (!stay && !extra) advance();
+    if (!stay && !extra) advanceOrReturn();
     void (async () => {
       const ok = task ? await task : false;
       if (!ok) return;
@@ -333,7 +422,18 @@ export default function CameraScreen({ route, navigation }: Props) {
     void updateInspection(inspection.id, (d) => {
       d.skipped[current.key] = true;
     });
-    advance();
+    advanceOrReturn();
+  };
+
+  /** Back cancels an active detour (returns to the walk); otherwise steps
+   *  one shot back. */
+  const goBackOne = () => {
+    if (detour) {
+      jumpTo(Math.min(detour.returnTo, Math.max(queue.length - 1, 0)));
+      setDetour(null);
+      return;
+    }
+    setIndex((i) => Math.max(0, i - 1));
   };
 
   /** One-tap category skip: mark the current section N/A and jump past it. */
@@ -351,6 +451,7 @@ export default function CameraScreen({ route, navigation }: Props) {
         style: 'destructive',
         onPress: () => {
           const firstOfSection = queue.findIndex((q) => q.sectionId === current.sectionId);
+          setDetour(null);
           void updateInspection(inspection.id, (d) => {
             d.sectionSkipped[current.sectionId] = true;
           });
@@ -412,9 +513,33 @@ export default function CameraScreen({ route, navigation }: Props) {
 
       {/* Bottom controls */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+        {detour && (
+          <Text style={styles.detourText} numberOfLines={1}>
+            After this: back to “{queue[detour.returnTo]?.label ?? 'previous shot'}”
+          </Text>
+        )}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.quickRow}
+          contentContainerStyle={styles.quickRowContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {quickChips.map((q) => (
+            <Pressable key={q.key} style={styles.quickChip} onPress={() => startDetour(q.key)}>
+              <Text style={styles.quickChipText} numberOfLines={1}>
+                {hasPhoto(q) ? '✓ ' : '+ '}
+                {q.prompt.label.replace(' {instance}', '').replace('{instance} ', '')}
+              </Text>
+            </Pressable>
+          ))}
+          <Pressable style={[styles.quickChip, styles.quickChipMore]} onPress={() => setPickerOpen(true)}>
+            <Text style={styles.quickChipText}>Jump to…</Text>
+          </Pressable>
+        </ScrollView>
         <View style={styles.bottomRow}>
-          <Pressable onPress={() => setIndex((i) => Math.max(0, i - 1))} style={styles.sideBtn} hitSlop={10}>
-            <Text style={styles.sideText}>‹ Back</Text>
+          <Pressable onPress={goBackOne} style={styles.sideBtn} hitSlop={10}>
+            <Text style={styles.sideText}>{detour ? '‹ Return' : '‹ Back'}</Text>
           </Pressable>
 
           <Pressable onPress={() => capture(false)} style={styles.shutter} disabled={!current || !!pending}>
@@ -437,14 +562,68 @@ export default function CameraScreen({ route, navigation }: Props) {
       </View>
 
       {/* Section-change interstitial — fades in over the live camera and
-          right back out; shooting is never blocked. */}
+          right back out; shooting is never blocked. When the block just
+          left has unshot items, the banner lingers and a tap detours back
+          through them. */}
       {banner && (
-        <Animated.View pointerEvents="none" style={[styles.bannerWrap, { opacity: bannerOpacity }]}>
-          <View style={styles.bannerCard}>
+        <Animated.View
+          pointerEvents={banner.missedKeys.length ? 'box-none' : 'none'}
+          style={[styles.bannerWrap, { opacity: bannerOpacity }]}
+        >
+          <Pressable style={styles.bannerCard} onPress={reviewMissed} disabled={banner.missedKeys.length === 0}>
             <Text style={styles.bannerKicker}>UP NEXT</Text>
             <Text style={styles.bannerTitle}>{banner.title}{banner.sub ? ` · ${banner.sub}` : ''}</Text>
-          </View>
+            {banner.missedKeys.length > 0 && (
+              <Text style={styles.bannerMissed} numberOfLines={2}>
+                Not shot: {banner.missedLabel} — tap to grab
+              </Text>
+            )}
+          </Pressable>
         </Animated.View>
+      )}
+
+      {/* Jump sheet — the whole walk in order; tap anything to detour to it. */}
+      {pickerOpen && (
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerHeader, { paddingTop: insets.top + 6 }]}>
+            <Text style={styles.pickerTitle}>Jump to a shot</Text>
+            <Pressable onPress={() => setPickerOpen(false)} hitSlop={12}>
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}>
+            {(() => {
+              const rows: React.ReactNode[] = [];
+              let lastHeader = '';
+              for (const q of queue) {
+                const header = `${q.sectionTitle}${q.instance ? ` · ${q.instance}` : ''}`;
+                if (header !== lastHeader) {
+                  rows.push(
+                    <Text key={`h-${q.key}`} style={styles.pickerHeaderText}>{header}</Text>,
+                  );
+                  lastHeader = header;
+                }
+                const done = hasPhoto(q);
+                rows.push(
+                  <Pressable
+                    key={q.key}
+                    style={[styles.pickerRow, q.key === current?.key && styles.pickerRowCurrent]}
+                    onPress={() => {
+                      setPickerOpen(false);
+                      startDetour(q.key);
+                    }}
+                  >
+                    <Text style={[styles.pickerRowText, done && styles.pickerRowDone]} numberOfLines={1}>
+                      {q.label}
+                    </Text>
+                    <Text style={styles.pickerRowMark}>{done ? '✓' : !q.prompt.optional ? 'REQ' : ''}</Text>
+                  </Pressable>,
+                );
+              }
+              return rows;
+            })()}
+          </ScrollView>
+        </View>
       )}
 
       {/* Caption review — full-screen photo with a slim caption bar. The
@@ -487,7 +666,7 @@ export default function CameraScreen({ route, navigation }: Props) {
                   <Text style={styles.moreText}>+1 More</Text>
                 </Pressable>
                 <Pressable style={styles.nextBtn} onPress={() => confirmCaption()}>
-                  <Text style={styles.nextText}>{pending.stay ? 'Done →' : 'Next →'}</Text>
+                  <Text style={styles.nextText}>{pending.stay ? 'Done →' : detour && detour.nextKeys.length === 0 ? 'Return →' : 'Next →'}</Text>
                 </Pressable>
               </View>
             </View>
@@ -531,6 +710,22 @@ const styles = StyleSheet.create({
   bannerCard: { backgroundColor: 'rgba(20,23,55,0.92)', borderRadius: 16, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, alignItems: 'center', maxWidth: '82%' },
   bannerKicker: { color: '#9fa5d6', fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
   bannerTitle: { color: colors.white, fontSize: 24, fontWeight: '800', marginTop: 4, textAlign: 'center' },
+  bannerMissed: { color: '#ffd54f', fontSize: 14, fontWeight: '700', marginTop: 8, textAlign: 'center' },
+  detourText: { color: '#ffd54f', fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  quickRow: { marginBottom: spacing.sm, flexGrow: 0 },
+  quickRowContent: { gap: 8, paddingRight: 8 },
+  quickChip: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, maxWidth: 190 },
+  quickChipMore: { backgroundColor: 'rgba(255,255,255,0.28)' },
+  quickChipText: { color: colors.white, fontSize: 13, fontWeight: '700' },
+  pickerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,14,36,0.97)' },
+  pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
+  pickerTitle: { color: colors.white, fontSize: 18, fontWeight: '800' },
+  pickerHeaderText: { color: '#9fa5d6', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.md, marginBottom: 6 },
+  pickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 12, marginBottom: 6, gap: 8 },
+  pickerRowCurrent: { borderWidth: 1.5, borderColor: '#ffd54f' },
+  pickerRowText: { color: colors.white, fontSize: 15, fontWeight: '600', flexShrink: 1 },
+  pickerRowDone: { color: '#8fd694' },
+  pickerRowMark: { color: '#c6c9e8', fontSize: 12, fontWeight: '800' },
   captionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
   captionLoading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   captionBottomWrap: { flex: 1, justifyContent: 'flex-end' },
