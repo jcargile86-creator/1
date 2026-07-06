@@ -21,7 +21,12 @@ export default function PhotoReviewScreen({ route, navigation }: Props) {
   const flow = inspection ? getFlow(inspection.flowId) : undefined;
   const section = flow?.sections.find((s) => s.id === sectionId);
   const prompt = section?.prompts.find((p) => p.id === promptId);
-  const label = prompt ? resolveLabel(prompt, instance) : 'Photos';
+  const firstPhoto = inspection?.photos.find(
+    (p) => p.sectionId === sectionId && p.promptId === promptId && p.instance === instance,
+  );
+  // Generated prompts (test-square quadrants) aren't in the static list —
+  // fall back to the photo's caption for the title.
+  const label = prompt ? resolveLabel(prompt, instance) : firstPhoto?.caption ?? 'Photos';
 
   /** Local caption drafts — persisted on blur so typing stays smooth. */
   const [drafts, setDrafts] = useState<Record<string, string>>({});

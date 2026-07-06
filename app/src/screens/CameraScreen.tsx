@@ -92,6 +92,11 @@ const SECTION_TERMS: Record<string, string[]> = {
 
 function suggestTerms(sectionId: string, promptId?: string): string[] {
   if (promptId && PROMPT_TERMS[promptId]) return PROMPT_TERMS[promptId];
+  // Generated quadrant prompts: overviews stay clean, condition close-ups
+  // get the shingle-surface terms.
+  if (promptId?.startsWith('ts-q') || promptId === 'ts-cond-open') {
+    return promptId.endsWith('-overview') ? [] : ['Potential Hail', 'Granule Loss', 'Contractor Marking'];
+  }
   return SECTION_TERMS[sectionId] ?? [];
 }
 

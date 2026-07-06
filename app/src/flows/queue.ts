@@ -1,5 +1,5 @@
 import { FlowDef, SectionDef, PromptDef } from './types';
-import { Inspection, promptKey } from '../types';
+import { Inspection, promptKey, answerKey } from '../types';
 
 /** A single camera stop: one prompt, resolved for a specific instance. */
 export interface QueueItem {
@@ -22,6 +22,38 @@ function sectionInstances(section: SectionDef, inspection: Inspection): (string 
   return list.length ? list : [];
 }
 
+/** Quadrant prompt pairs generated from the slope's selected test-square
+ *  size: each quadrant gets an overview then an immediate condition
+ *  close-up, captioned "<slope> slope- <size> qN overview/condition". */
+function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: string): PromptDef[] {
+  const cfg = section.quadrants!;
+  const raw = inspection.answers[answerKey(section.id, cfg.sizeQuestionId, instance)];
+  const size = (typeof raw === 'string' && raw ? raw : cfg.defaultSize).split(' ')[0];
+  const count = cfg.counts[size] ?? cfg.counts[cfg.defaultSize.split(' ')[0]] ?? 0;
+  const prompts: PromptDef[] = [];
+  if (count === 0) {
+    prompts.push({
+      id: 'ts-cond-open',
+      label: `${instance} slope- ${size} conditions`,
+      hint: 'No quadrants at this size — minimum two condition close-ups, one shingle exposure each. Underline hail hits, one per shingle.',
+    });
+    return prompts;
+  }
+  for (let n = 1; n <= count; n++) {
+    prompts.push({
+      id: `ts-q${n}-overview`,
+      label: `${instance} slope- ${size} q${n} overview`,
+      hint: `Full Q${n} section in frame`,
+    });
+    prompts.push({
+      id: `ts-q${n}-condition`,
+      label: `${instance} slope- ${size} q${n} condition`,
+      hint: 'Close-up, one shingle exposure. Underline hail hits — one per shingle. Never write counts on the roof.',
+    });
+  }
+  return prompts;
+}
+
 /** Build the ordered camera queue for one section (or the whole flow).
  *  Whole-flow queues exclude sections marked N/A; an explicitly requested
  *  section is always included (the inspector chose to open it). */
@@ -42,6 +74,18 @@ export function buildQueue(flow: FlowDef, inspection: Inspection, sectionId?: st
           label: resolveLabel(p, inst),
           key: promptKey(s.id, p.id, inst),
         });
+        if (s.quadrants && inst && p.id === s.quadrants.afterPromptId) {
+          for (const qp of quadrantPrompts(s, inspection, inst)) {
+            items.push({
+              sectionId: s.id,
+              sectionTitle: s.title,
+              instance: inst,
+              prompt: qp,
+              label: qp.label,
+              key: promptKey(s.id, qp.id, inst),
+            });
+          }
+        }
       }
     }
   }

@@ -9,6 +9,7 @@ import { buildQueue, firstPendingIndex, isDone } from '../flows/queue';
 import { answerKey } from '../types';
 import { generateReport } from '../report/generate';
 import PromptChecklist from '../components/PromptChecklist';
+import QuestionFields from '../components/QuestionFields';
 import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Inspection'>;
@@ -146,9 +147,9 @@ export default function InspectionScreen({ route, navigation }: Props) {
     const complete = required.length > 0 && reqDone >= required.length;
     const open = isExpanded(entry.key);
 
-    const questions: QuestionDef[] = (entry.instance ? section.instanceQuestions ?? [] : section.questions ?? []).filter(
-      (q) => !q.promptId,
-    );
+    const pool: QuestionDef[] = entry.instance ? section.instanceQuestions ?? [] : section.questions ?? [];
+    const pinnedQuestions = pool.filter((q) => q.pinned);
+    const questions: QuestionDef[] = pool.filter((q) => !q.promptId && !q.pinned);
     const answered = questions.filter((q) => {
       const v = inspection.answers[answerKey(section.id, q.id, entry.instance)];
       return v !== undefined && v !== '';
@@ -182,6 +183,21 @@ export default function InspectionScreen({ route, navigation }: Props) {
                 </Pressable>
               )}
             </View>
+
+            {pinnedQuestions.length > 0 && (
+              <QuestionFields
+                inspection={inspection}
+                sectionId={entry.sectionId}
+                instance={entry.instance}
+                questions={pinnedQuestions}
+                hideGroups
+                onAnswer={(qid, v) =>
+                  void updateInspection(id, (d) => {
+                    d.answers[answerKey(entry.sectionId, qid, entry.instance)] = v;
+                  })
+                }
+              />
+            )}
 
             {questions.length > 0 && (
               <Pressable

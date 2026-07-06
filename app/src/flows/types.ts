@@ -21,6 +21,9 @@ export interface QuestionDef {
   /** Attach this question to a specific photo prompt — it renders alongside
    *  that item in the capture flow instead of the section's question list. */
   promptId?: string;
+  /** Render this question inline at the top of its sub-section (e.g. test
+   *  square size — it must be answered before quadrant prompts generate). */
+  pinned?: boolean;
 }
 
 export interface PromptDef {
@@ -56,6 +59,17 @@ export interface SectionDef {
   area?: AreaTab;
   /** False = the section can never be marked N/A (e.g. Arrival). */
   skippable?: boolean;
+  /** Dynamic quadrant prompts (test squares): generated per instance from the
+   *  selected size — an overview + condition close-up pair per quadrant. */
+  quadrants?: {
+    /** Instance question whose answer selects the size. */
+    sizeQuestionId: string;
+    /** Generated prompts are inserted right after this prompt. */
+    afterPromptId: string;
+    /** Size key (first token of the answer) → quadrant count. */
+    counts: Record<string, number>;
+    defaultSize: string;
+  };
   /** When set, the section's prompts/questions run once per instance. */
   repeat?: RepeatDef;
   prompts: PromptDef[];

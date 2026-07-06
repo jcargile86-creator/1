@@ -27,7 +27,7 @@ export default function QuestionsScreen({ route, navigation }: Props) {
   if (!inspection || !section) return null;
 
   const questions: QuestionDef[] = (instance ? section.instanceQuestions ?? [] : section.questions ?? []).filter(
-    (q) => !q.promptId,
+    (q) => !q.promptId && !q.pinned,
   );
 
   const noteKey = instance ? `${sectionId}:${instance}` : sectionId;
