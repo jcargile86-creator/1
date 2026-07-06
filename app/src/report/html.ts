@@ -108,15 +108,19 @@ function roofAssessmentPage(insp: Inspection, flow: FlowDef, pageNo: number): st
     })
     .join('');
 
+  // Shingle conditions are answered yes/no per directional slope.
   const conds: [string, string][] = [
-    ['Blisters', 'condBlisters'], ['Cup Curl', 'condCupCurl'], ['Deck Rot', 'condDeckRot'],
-    ['Granule Loss', 'condGranuleLoss'], ['Manufacturer Defects', 'condMfrDefects'], ['Mechanical', 'condMechanical'],
-    ['Nail Pops', 'condNailPops'], ['Prior Repairs', 'condPriorRepairs'], ['Thermal Cracking', 'condThermalCracking'],
+    ['Blisters', 'blisters'], ['Cup Curl', 'cupCurl'], ['Deck Rot', 'deckRot'],
+    ['Granule Loss', 'granuleLoss'], ['Manufacturer Defects', 'mfrDefects'], ['Mechanical', 'mechanical'],
+    ['Nail Pops', 'nailPops'], ['Prior Repairs', 'priorRepairs'], ['Thermal Cracking', 'thermalCracking'],
   ];
+  const slopeForLetter = (letter: string) => slopes.find((s) => s[0].toUpperCase() === letter);
   const condRows = conds
     .map(([label, qid]) => {
-      const v = ans(insp, 'wrapup', qid).toUpperCase();
-      const cell = (dir: string) => (v.includes(dir) || v.includes('ALL') ? '✓' : '');
+      const cell = (dir: string) => {
+        const slope = slopeForLetter(dir);
+        return slope && ans(insp, 'test-squares', qid, slope) === 'Yes' ? '✓' : '';
+      };
       return `<tr><td class="k">${label}</td><td>${cell('F')}</td><td>${cell('L')}</td><td>${cell('B')}</td><td>${cell('R')}</td></tr>`;
     })
     .join('');
