@@ -122,6 +122,24 @@ jobs:
           EXPO_APPLE_TEAM_TYPE: INDIVIDUAL
         run: eas build --platform ios --profile production --non-interactive --no-wait --auto-submit
 
+  # Print recent EAS build + submission status ([eas-status] in commit message).
+  eas-status:
+    if: contains(github.event.head_commit.message, '[eas-status]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ env.EXPO_TOKEN }}
+      - name: List recent builds
+        working-directory: app
+        run: |
+          eas build:list --platform ios --limit 3 --non-interactive || true
+
   # Submit an ALREADY-BUILT binary to TestFlight without spending a new build.
   # Runs when the commit message contains [submit-ios].
   ios-submit:

@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { deleteInspectionPhotos } from '../store/photos';
@@ -54,6 +56,10 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
         )}
       />
+      <Text style={styles.versionStamp}>
+        v{Constants.expoConfig?.version ?? '?'} · runtime {String(Updates.runtimeVersion ?? 'dev')} · update{' '}
+        {Updates.updateId ? Updates.updateId.slice(0, 8) : 'embedded'}
+      </Text>
     </View>
   );
 }
@@ -84,4 +90,5 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 14, color: colors.grayText, marginTop: 2 },
   cardMeta: { fontSize: 13, color: colors.grayText, marginTop: 6 },
   chev: { fontSize: 30, color: colors.grayLine, marginLeft: spacing.sm },
+  versionStamp: { textAlign: 'center', color: colors.grayLine, fontSize: 11, paddingVertical: 4 },
 });
