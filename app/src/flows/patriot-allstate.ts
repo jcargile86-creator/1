@@ -54,7 +54,8 @@ export const patriotAllstateFlow: FlowDef = {
         { id: 'light-blocks', label: '{instance} Elevation Light/Outlet Blocks', hint: 'Count them — mounted through siding', optional: true },
         { id: 'collateral', label: '{instance} Elevation Collateral', hint: 'Electric panel, gas meter, AC fins, cable box — EVERY elevation, even if clean. Caption: item + clean | spatter present + size', },
         { id: 'cornice-returns', label: '{instance} Elevation Cornice Returns', hint: 'At roof-to-wall connection; counts entered in roof section only if that slope has findings', optional: true },
-        { id: 'gutters-downspouts', label: '{instance} Elevation Gutters & Downspouts', hint: 'Size, painted, material', optional: true },
+        { id: 'gutters', label: '{instance} Elevation Gutters', hint: 'Topside + face; size, painted, material; chalk when calling a condition', optional: true },
+        { id: 'downspouts', label: '{instance} Elevation Downspouts', hint: 'Full run + close-ups of dents/spatter; note size (2x3 / 3x4), material, painted in caption', optional: true },
       ],
       instanceQuestions: [
         { id: 'windowCount', text: 'Windows on this elevation (count)', type: 'number' },
@@ -74,7 +75,11 @@ export const patriotAllstateFlow: FlowDef = {
         { id: 'gableVents', text: 'Gable vents (damaged of total + material)', type: 'text' },
         { id: 'lightBlocks', text: 'Light/outlet blocks (count)', type: 'number' },
         { id: 'gutters', text: 'Gutters (damaged of total, size, paint, material)', type: 'text' },
-        { id: 'downspouts', text: 'Downspouts (damaged of total, size, paint, material)', type: 'text' },
+        { id: 'downspoutsDamaged', text: 'Downspouts potentially damaged (of total, e.g. 1 of 2)', type: 'text' },
+        { id: 'downspoutSize', text: 'Downspout size (width x depth)', type: 'choice', choices: ['2\u2033 x 3\u2033', '3\u2033 x 4\u2033', '3\u2033 Round', '4\u2033 Round', 'Other'] },
+        { id: 'downspoutMaterial', text: 'Downspout material', type: 'choice', choices: ['Aluminum', 'Steel', 'Copper', 'Vinyl', 'Other'] },
+        { id: 'downspoutPainted', text: 'Downspouts painted?', type: 'yesno' },
+        { id: 'downspoutLF', text: 'Downspout total length on this elevation (linear ft)', type: 'number' },
       ],
     },
     {

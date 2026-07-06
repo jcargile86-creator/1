@@ -123,7 +123,18 @@ function roofAssessmentPage(insp: Inspection, flow: FlowDef, pageNo: number): st
 
   const elevs = insp.instances['elevations'] ?? [];
   const gutterRows = elevs
-    .map((e) => `<tr><td class="k">${esc(e[0])}:</td><td>${esc(ans(insp, 'elevations', 'gutters', e) || '—')}</td><td>${esc(ans(insp, 'elevations', 'downspouts', e) || '—')}</td></tr>`)
+    .map((e) => {
+      const ds = [
+        ans(insp, 'elevations', 'downspoutsDamaged', e),
+        ans(insp, 'elevations', 'downspoutSize', e),
+        ans(insp, 'elevations', 'downspoutMaterial', e),
+        ans(insp, 'elevations', 'downspoutPainted', e) === 'Yes' ? 'painted' : '',
+        ans(insp, 'elevations', 'downspoutLF', e) ? `${ans(insp, 'elevations', 'downspoutLF', e)} LF` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return `<tr><td class="k">${esc(e[0])}:</td><td>${esc(ans(insp, 'elevations', 'gutters', e) || '—')}</td><td>${esc(ds || '—')}</td></tr>`;
+    })
     .join('');
 
   const body = `
