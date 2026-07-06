@@ -133,13 +133,28 @@ export default function CameraScreen({ route, navigation }: Props) {
     const takenAt = new Date().toISOString();
     setCaption(shot.label);
     setPending({ photoId, uri: null, stay });
+    // Instant preview: grab the live viewfinder frame (~ms) so the caption
+    // card never waits on the full-resolution photo's disk write + decode.
+    void (async () => {
+      try {
+        const snap = await cameraRef.current?.takeSnapshot({ quality: 70 });
+        if (snap?.path) {
+          const snapUri = `file://${snap.path}`;
+          setPending((p) => (p && p.photoId === photoId && !p.uri ? { ...p, uri: snapUri } : p));
+          setLastThumb(snapUri);
+        }
+      } catch {
+        // full photo below becomes the preview fallback
+      }
+    })();
     captureTask.current = (async () => {
       try {
         const pic = await cameraRef.current?.takePhoto({ flash, enableShutterSound: false });
         if (!pic?.path) throw new Error('no photo');
         const uri = persistPhoto(`file://${pic.path}`, inspection.id, photoId);
-        setPending((p) => (p && p.photoId === photoId ? { ...p, uri } : p));
-        setLastThumb(uri);
+        // Keep showing the lightweight snapshot; only use the full-res file
+        // as preview if the snapshot failed.
+        setPending((p) => (p && p.photoId === photoId && !p.uri ? { ...p, uri } : p));
         await updateInspection(inspection.id, (d) => {
           d.photos.push({
             id: photoId,
