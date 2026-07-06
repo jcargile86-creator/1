@@ -100,7 +100,6 @@ export default function CameraScreen({ route, navigation }: Props) {
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto | null>(null);
   const [caption, setCaption] = useState('');
-  const [editing, setEditing] = useState(false);
   const cameraRef = useRef<Camera>(null);
   /** In-flight capture/save work — caption confirm/retake await this. */
   const captureTask = useRef<Promise<boolean> | null>(null);
@@ -189,7 +188,6 @@ export default function CameraScreen({ route, navigation }: Props) {
     const task = captureTask.current;
     setPending(null);
     setCaption('');
-    setEditing(false);
     if (!stay) advance();
     void (async () => {
       const ok = task ? await task : false;
@@ -208,7 +206,6 @@ export default function CameraScreen({ route, navigation }: Props) {
     const task = captureTask.current;
     setPending(null);
     setCaption('');
-    setEditing(false);
     setLastThumb(null);
     void (async () => {
       const ok = task ? await task : false;
@@ -353,24 +350,14 @@ export default function CameraScreen({ route, navigation }: Props) {
             pointerEvents="box-none"
           >
             <View style={[styles.captionBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-              {editing ? (
-                <TextInput
-                  style={styles.captionInput}
-                  value={caption}
-                  onChangeText={setCaption}
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={() => setEditing(false)}
-                  onBlur={() => setEditing(false)}
-                  placeholder="Photo caption"
-                  placeholderTextColor={colors.grayText}
-                />
-              ) : (
-                <Pressable style={styles.captionRow} onPress={() => setEditing(true)}>
-                  <Text style={styles.captionText} numberOfLines={2}>{caption}</Text>
-                  <Text style={styles.editHint}>Edit</Text>
-                </Pressable>
-              )}
+              <TextInput
+                style={styles.captionInput}
+                value={caption}
+                onChangeText={setCaption}
+                multiline
+                placeholder="Photo caption"
+                placeholderTextColor="#9aa"
+              />
               <View style={styles.chipsWrap}>
                 {current && suggestTerms(current.sectionId, current.prompt.id).map((t) => (
                   <Pressable key={t} style={styles.chip} onPress={() => appendTerm(t)}>
@@ -428,16 +415,15 @@ const styles = StyleSheet.create({
   captionLoading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   captionBottomWrap: { flex: 1, justifyContent: 'flex-end' },
   captionBar: { backgroundColor: 'rgba(12,14,36,0.88)', paddingHorizontal: spacing.md, paddingTop: spacing.sm },
-  captionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
-  captionText: { flex: 1, color: colors.white, fontSize: 16, fontWeight: '700' },
-  editHint: { color: '#ffd54f', fontSize: 13, fontWeight: '800' },
   captionInput: {
-    backgroundColor: colors.white,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     fontSize: 16,
-    color: colors.ink,
+    fontWeight: '600',
+    color: colors.white,
+    maxHeight: 84,
   },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.xs + 2 },
   chip: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },

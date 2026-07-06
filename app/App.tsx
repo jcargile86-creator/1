@@ -10,6 +10,7 @@ import NewInspectionScreen from './src/screens/NewInspectionScreen';
 import InspectionScreen from './src/screens/InspectionScreen';
 import SectionScreen from './src/screens/SectionScreen';
 import CameraScreen from './src/screens/CameraScreen';
+import PhotoReviewScreen from './src/screens/PhotoReviewScreen';
 import QuestionsScreen from './src/screens/QuestionsScreen';
 import SketchScreen from './src/screens/SketchScreen';
 import { RootStackParamList } from './src/navigation';
@@ -39,6 +40,7 @@ export default function App() {
             <Stack.Screen name="Inspection" component={InspectionScreen} options={{ title: 'Inspection' }} />
             <Stack.Screen name="Section" component={SectionScreen} options={{ title: 'Section' }} />
             <Stack.Screen name="Camera" component={CameraScreen} options={{ headerShown: false, animation: 'fade' }} />
+            <Stack.Screen name="PhotoReview" component={PhotoReviewScreen} options={{ title: 'Photos' }} />
             <Stack.Screen name="Questions" component={QuestionsScreen} options={{ title: 'Questions' }} />
             <Stack.Screen name="Sketch" component={SketchScreen} options={{ title: 'Diagram' }} />
           </Stack.Navigator>

@@ -259,7 +259,16 @@ export default function InspectionScreen({ route, navigation }: Props) {
             <PromptChecklist
               items={items}
               inspection={inspection}
-              onOpen={(item) => navigation.navigate('Camera', { id, sectionId: item.sectionId, instance: item.instance, startKey: item.key })}
+              onOpen={(item) => {
+                const hasPhotos = inspection.photos.some(
+                  (p) => p.sectionId === item.sectionId && p.promptId === item.prompt.id && p.instance === item.instance,
+                );
+                if (hasPhotos) {
+                  navigation.navigate('PhotoReview', { id, sectionId: item.sectionId, promptId: item.prompt.id, instance: item.instance });
+                } else {
+                  navigation.navigate('Camera', { id, sectionId: item.sectionId, instance: item.instance, startKey: item.key });
+                }
+              }}
               onToggleSkip={(key) =>
                 void updateInspection(id, (d) => {
                   if (d.skipped[key]) delete d.skipped[key];
