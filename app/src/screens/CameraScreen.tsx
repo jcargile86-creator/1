@@ -68,7 +68,6 @@ const PROMPT_TERMS: Record<string, string[]> = {
   'exhaust-caps': ['Potential Hail', 'Painted', 'Contractor Marking'],
   'rain-diverters': ['Potential Hail', 'Painted', 'Contractor Marking'],
   // test squares
-  'ts-conditions': ['Potential Hail', 'Granule Loss', 'Contractor Marking'],
   'contractor-markings': ['Contractor Marking', 'Potential Blister', 'Potential Mechanical'],
   // wind & tree
   'wind-detail': ['Potential Wind', 'Potential Mechanical', 'Contractor Marking'],
@@ -81,7 +80,7 @@ const PROMPT_TERMS: Record<string, string[]> = {
 
 const SECTION_TERMS: Record<string, string[]> = {
   wind: ['Potential Wind', 'Contractor Marking'],
-  'test-squares': ['Potential Hail', 'Granule Loss', 'Contractor Marking'],
+  'test-squares': ['Potential Hail', 'Potential Granule Loss', 'Contractor Marking'],
   interior: ['Potential Leak', 'Water Stain'],
   'roof-eave': [],
   'roof-overview': ['Potential Hail', 'Contractor Marking'],
@@ -95,7 +94,9 @@ function suggestTerms(sectionId: string, promptId?: string): string[] {
   // Generated quadrant prompts: overviews stay clean, condition close-ups
   // get the shingle-surface terms.
   if (promptId?.startsWith('ts-q') || promptId === 'ts-cond-open') {
-    return promptId.endsWith('-overview') ? [] : ['Potential Hail', 'Granule Loss', 'Contractor Marking'];
+    return promptId.endsWith('-overview')
+      ? []
+      : ['Potential Hail', 'Potential Granule Loss', 'Potential Blister', 'Contractor Marking'];
   }
   return SECTION_TERMS[sectionId] ?? [];
 }

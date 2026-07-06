@@ -34,8 +34,8 @@ function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: 
   if (count === 0) {
     prompts.push({
       id: 'ts-cond-open',
-      label: `${instance} slope- ${size} conditions`,
-      hint: 'No quadrants at this size — minimum two condition close-ups, one shingle exposure each. Underline hail hits, one per shingle.',
+      label: `${instance} slope- ${size}`,
+      hint: 'No quadrants at this size — minimum two condition close-ups, one shingle exposure each. Add the condition (potential hail / potential granule loss...) to the caption.',
     });
     return prompts;
   }
@@ -47,8 +47,8 @@ function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: 
     });
     prompts.push({
       id: `ts-q${n}-condition`,
-      label: `${instance} slope- ${size} q${n} condition`,
-      hint: 'Close-up, one shingle exposure. Underline hail hits — one per shingle. Never write counts on the roof.',
+      label: `${instance} slope- ${size} q${n}`,
+      hint: 'Condition close-up, one shingle exposure — add potential hail / potential granule loss to the caption. Underline hail hits, one per shingle.',
     });
   }
   return prompts;
