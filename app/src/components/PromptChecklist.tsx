@@ -34,15 +34,15 @@ export default function PromptChecklist({ items, inspection, onOpen, onToggleSki
               <Text style={[styles.label, skipped && styles.labelSkipped, done && !skipped && styles.labelDone]}>
                 {item.label}
               </Text>
-              <Text style={styles.meta}>
-                {photos.length
-                  ? `${photos.length} photo${photos.length > 1 ? 's' : ''}`
-                  : skipped
-                    ? 'skipped — long-press to restore'
-                    : item.prompt.optional
-                      ? 'optional'
+              {photos.length || skipped || !item.prompt.optional ? (
+                <Text style={styles.meta}>
+                  {photos.length
+                    ? `${photos.length} photo${photos.length > 1 ? 's' : ''}`
+                    : skipped
+                      ? 'skipped — long-press to restore'
                       : 'required'}
-              </Text>
+                </Text>
+              ) : null}
             </View>
             {photos[0] ? (
               <Image source={{ uri: photos[0].uri }} style={styles.thumb} />

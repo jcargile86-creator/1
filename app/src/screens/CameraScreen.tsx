@@ -297,9 +297,11 @@ export default function CameraScreen({ route, navigation }: Props) {
           <>
             <View style={styles.tagRow}>
               <Text style={styles.sectionTag}>{current.sectionTitle}{current.instance ? ` · ${current.instance}` : ''}{isDone(inspection, current.key) ? ' · ✓ captured' : ''}</Text>
-              <View style={[styles.badge, current.prompt.optional ? styles.badgeOptional : styles.badgeRequired]}>
-                <Text style={styles.badgeText}>{current.prompt.optional ? 'OPTIONAL — SKIP IF N/A' : 'REQUIRED'}</Text>
-              </View>
+              {!current.prompt.optional && (
+                <View style={[styles.badge, styles.badgeRequired]}>
+                  <Text style={styles.badgeText}>REQUIRED</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.label}>{current.label}</Text>
             {current.prompt.hint ? <Text style={styles.hint}>{current.prompt.hint}</Text> : null}
@@ -397,7 +399,6 @@ const styles = StyleSheet.create({
   sectionTag: { color: '#9fa5d6', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 1 },
   badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   badgeRequired: { backgroundColor: colors.red },
-  badgeOptional: { backgroundColor: 'rgba(255,255,255,0.22)' },
   badgeText: { color: colors.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   label: { color: colors.white, fontSize: 22, fontWeight: '800', marginTop: 2 },
   hint: { color: '#d5d8f2', fontSize: 13, marginTop: 4 },
