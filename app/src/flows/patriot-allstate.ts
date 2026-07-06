@@ -125,7 +125,7 @@ export const patriotAllstateFlow: FlowDef = {
         { id: '360-left', label: '360 Overview - Left' },
         { id: '360-back', label: '360 Overview - Back' },
         { id: '360-right', label: '360 Overview - Right' },
-        { id: 'valley', label: 'Valley Material', hint: 'Chalk open metal; label intersecting facets; note which slope lays on top', optional: true },
+        { id: 'valley', label: 'Valley Material', hint: 'Chalk open metal; label intersecting facets; note which slope lays on top' },
         { id: 'hip-ridge', label: 'Hip & Ridge Condition', hint: 'Angled shot showing profile thickness — plane landing, not helicopter' },
         { id: 'ridge-vent', label: 'Ridge Vent + Measurement', hint: 'Required on EVERY inspection, damage or not — measure every run in linear ft; chalk aluminum. Skip only if no ridge vent exists.', optional: true },
         { id: 'chimney', label: 'Chimney — Cap, Chase Cover, Flashing', hint: 'Flashing size: small/medium/large; facet letter in caption; use sun/shadow for flue caps', optional: true },

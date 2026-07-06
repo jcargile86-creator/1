@@ -232,15 +232,17 @@ export default function CameraScreen({ route, navigation }: Props) {
   };
 
   /** Next arrow: advance immediately; the caption write catches up in the
-   *  background once the capture task lands. */
-  const confirmCaption = () => {
+   *  background once the capture task lands. "+1 More" saves the shot the
+   *  same way but stays on this prompt so the next shutter press adds
+   *  another photo to the same item. */
+  const confirmCaption = (extra = false) => {
     if (!pending) return;
     const { photoId, stay } = pending;
     const finalCaption = caption.trim() || current?.label || 'Photo';
     const task = captureTask.current;
     setPending(null);
     setCaption('');
-    if (!stay) advance();
+    if (!stay && !extra) advance();
     void (async () => {
       const ok = task ? await task : false;
       if (!ok) return;
@@ -428,7 +430,10 @@ export default function CameraScreen({ route, navigation }: Props) {
                 <Pressable style={styles.retakeBtn} onPress={retake}>
                   <Text style={styles.retakeText}>Retake</Text>
                 </Pressable>
-                <Pressable style={styles.nextBtn} onPress={confirmCaption}>
+                <Pressable style={styles.moreBtn} onPress={() => confirmCaption(true)}>
+                  <Text style={styles.moreText}>+1 More</Text>
+                </Pressable>
+                <Pressable style={styles.nextBtn} onPress={() => confirmCaption()}>
                   <Text style={styles.nextText}>{pending.stay ? 'Done →' : 'Next →'}</Text>
                 </Pressable>
               </View>
@@ -489,6 +494,8 @@ const styles = StyleSheet.create({
   captionActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   retakeBtn: { flex: 1, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
   retakeText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-  nextBtn: { flex: 2, backgroundColor: colors.red, borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  moreBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  moreText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  nextBtn: { flex: 1.4, backgroundColor: colors.red, borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
   nextText: { color: colors.white, fontSize: 19, fontWeight: '800' },
 });
