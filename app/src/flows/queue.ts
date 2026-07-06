@@ -34,7 +34,7 @@ function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: 
   if (count === 0) {
     prompts.push({
       id: 'ts-cond-open',
-      label: `${instance} slope- ${size}`,
+      label: `${instance} slope- ${size} test square`,
       hint: 'No quadrants at this size — minimum two condition close-ups, one shingle exposure each. Add the condition (potential hail / potential granule loss...) to the caption.',
     });
     return prompts;
@@ -42,12 +42,12 @@ function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: 
   for (let n = 1; n <= count; n++) {
     prompts.push({
       id: `ts-q${n}-overview`,
-      label: `${instance} slope- ${size} q${n} overview`,
+      label: `${instance} slope- ${size} test square q${n} overview`,
       hint: `Full Q${n} section in frame`,
     });
     prompts.push({
       id: `ts-q${n}-condition`,
-      label: `${instance} slope- ${size} q${n}`,
+      label: `${instance} slope- ${size} test square q${n}`,
       hint: 'Condition close-up, one shingle exposure — add potential hail / potential granule loss to the caption. Underline hail hits, one per shingle.',
     });
   }
