@@ -17,6 +17,8 @@ export interface PhotoQueueItem extends QueueItemBase {
   kind: 'photo';
   prompt: PromptDef;
   question?: undefined;
+  /** Caption base when it differs from the menu label. */
+  caption?: string;
 }
 export interface QuestionQueueItem extends QueueItemBase {
   kind: 'question';
@@ -47,7 +49,8 @@ function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: 
   if (count === 0) {
     prompts.push({
       id: 'ts-cond-open',
-      label: `${instance} slope- ${size} test square`,
+      label: `${instance} slope- test square- condition`,
+      caption: `${instance} slope- ${size} test square`,
       hint: 'No quadrants at this size — minimum two condition close-ups, one shingle exposure each. Add the condition (potential hail / potential granule loss...) to the caption.',
     });
     return prompts;
@@ -60,7 +63,8 @@ function quadrantPrompts(section: SectionDef, inspection: Inspection, instance: 
     });
     prompts.push({
       id: `ts-q${n}-condition`,
-      label: `${instance} slope- ${size} test square q${n}`,
+      label: `${instance} slope- test square- q${n} condition`,
+      caption: `${instance} slope- ${size} test square q${n}`,
       hint: 'Condition close-up, one shingle exposure — add potential hail / potential granule loss to the caption. Underline hail hits, one per shingle.',
     });
   }
@@ -95,6 +99,7 @@ export function buildQueue(flow: FlowDef, inspection: Inspection, sectionId?: st
           instance: inst,
           prompt: p,
           label: label ?? resolveLabel(p, inst),
+          caption: p.caption ? (inst ? p.caption.replace('{instance}', inst) : p.caption) : undefined,
           key: promptKey(s.id, p.id, inst),
         });
       const pushQuestion = (q: QuestionDef) =>

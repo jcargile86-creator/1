@@ -358,7 +358,8 @@ export default function CameraScreen({ route, navigation }: Props) {
     const shot = current;
     const photoId = Crypto.randomUUID();
     const takenAt = new Date().toISOString();
-    setCaption(shot.label);
+    const captionBase = shot.caption ?? shot.label;
+    setCaption(captionBase);
     setPending({ photoId, uri: null, stay });
     // Instant preview: grab the live viewfinder frame (~ms) so the caption
     // card never waits on the full-resolution photo's disk write + decode.
@@ -395,7 +396,7 @@ export default function CameraScreen({ route, navigation }: Props) {
             sectionId: shot.sectionId,
             promptId: shot.prompt.id,
             instance: shot.instance,
-            caption: shot.label,
+            caption: captionBase,
             takenAt,
           });
           delete d.skipped[shot.key];
@@ -417,7 +418,7 @@ export default function CameraScreen({ route, navigation }: Props) {
   const confirmCaption = (extra = false) => {
     if (!pending) return;
     const { photoId, stay } = pending;
-    const finalCaption = caption.trim() || current?.label || 'Photo';
+    const finalCaption = caption.trim() || (current?.kind === 'photo' ? current.caption ?? current.label : current?.label) || 'Photo';
     const task = captureTask.current;
     setPending(null);
     setCaption('');

@@ -31,6 +31,10 @@ export interface PromptDef {
   /** Label shown at the top of the camera and used as the photo caption base.
    *  May contain `{instance}` which is replaced by the room/slope/facet name. */
   label: string;
+  /** Overrides the caption base when it should differ from the menu label
+   *  (e.g. quadrant close-ups caption without the word "condition" so the
+   *  actual condition slots in). Supports `{instance}` like label. */
+  caption?: string;
   /** Short guidance line under the label (what to include: tape measure, flash, angle...). */
   hint?: string;
   /** Prompts marked optional don't count against section completion. */
