@@ -2,7 +2,7 @@
   "expo": {
     "name": "InspectPro",
     "slug": "inspectpro",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "runtimeVersion": { "policy": "appVersion" },
     "orientation": "portrait",
     "icon": "./assets/icon.png",

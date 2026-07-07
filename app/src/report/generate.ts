@@ -1,9 +1,47 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { File, Directory, Paths } from 'expo-file-system';
-import { Inspection, PhotoRecord } from '../types';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { Inspection } from '../types';
 import { FlowDef } from '../flows/types';
 import { buildReportHtml, PhotoSource } from './html';
+
+/** PDF embeds are downscaled print copies — the untouched full-resolution
+ *  originals stay on disk for the XactAnalysis photo export. */
+const PRINT_WIDTH = 1000;
+const PRINT_QUALITY = 0.55;
+/** Parallel downscales per batch — keeps peak native memory bounded. */
+const BATCH = 6;
+
+function printCopy(inspectionId: string, imageId: string): File {
+  const dir = new Directory(Paths.document, 'photos', inspectionId);
+  dir.create({ intermediates: true, idempotent: true });
+  return new File(dir, `${imageId}-print.jpg`);
+}
+
+/** Downscale one image to print size, caching the copy next to the photo
+ *  files so regenerating the report doesn't redo the work. */
+async function toPrintDataUri(inspectionId: string, imageId: string, sourceUri: string): Promise<string | null> {
+  const cached = printCopy(inspectionId, imageId);
+  try {
+    if (cached.exists) return `data:image/jpeg;base64,${cached.base64Sync()}`;
+  } catch {
+    // unreadable cache — regenerate below
+  }
+  try {
+    const image = await ImageManipulator.manipulate(sourceUri).resize({ width: PRINT_WIDTH }).renderAsync();
+    const saved = await image.saveAsync({ compress: PRINT_QUALITY, format: SaveFormat.JPEG });
+    try {
+      new File(saved.uri).move(cached);
+    } catch {
+      // cache write failed — read straight from the render output
+      return `data:image/jpeg;base64,${new File(saved.uri).base64Sync()}`;
+    }
+    return `data:image/jpeg;base64,${cached.base64Sync()}`;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Renders the inspection report to PDF (offline, on-device) and opens the
@@ -11,26 +49,42 @@ import { buildReportHtml, PhotoSource } from './html';
  */
 export async function generateReport(inspection: Inspection, flow: FlowDef): Promise<string> {
   // expo-print renders local file URIs unreliably across platforms — embed
-  // photos as base64 data URIs. Prefer the screen-res preview snapshot:
-  // it's print-sized, keeping the report HTML small enough to render.
+  // photos as base64 data URIs, downscaled so a 100+ photo report stays a
+  // reasonable file size.
   const cache = new Map<string, string>();
-  const src: PhotoSource = {
-    resolve: (photo: PhotoRecord) => {
-      const hit = cache.get(photo.id);
-      if (hit) return hit;
-      for (const candidate of [photo.previewUri, photo.uri]) {
-        if (!candidate) continue;
-        try {
-          const b64 = new File(candidate).base64Sync();
-          const uri = `data:image/jpeg;base64,${b64}`;
-          cache.set(photo.id, uri);
-          return uri;
-        } catch {
-          // try the next candidate
+  const images: { id: string; candidates: (string | undefined)[] }[] = [
+    ...inspection.photos.map((p) => ({ id: p.id, candidates: [p.uri, p.previewUri] })),
+    ...inspection.documents
+      .filter((d) => d.mimeType.startsWith('image/'))
+      .map((d) => ({ id: d.id, candidates: [d.uri] })),
+  ];
+  for (let i = 0; i < images.length; i += BATCH) {
+    await Promise.all(
+      images.slice(i, i + BATCH).map(async ({ id, candidates }) => {
+        for (const uri of candidates) {
+          if (!uri) continue;
+          const data = await toPrintDataUri(inspection.id, id, uri);
+          if (data) {
+            cache.set(id, data);
+            return;
+          }
         }
-      }
-      return photo.uri;
-    },
+        // Last resort: embed an original as-is rather than drop the photo.
+        for (const uri of candidates) {
+          if (!uri) continue;
+          try {
+            cache.set(id, `data:image/jpeg;base64,${new File(uri).base64Sync()}`);
+            return;
+          } catch {
+            // try the next candidate
+          }
+        }
+      }),
+    );
+  }
+
+  const src: PhotoSource = {
+    resolve: (photo) => cache.get(photo.id) ?? photo.uri,
   };
 
   const html = buildReportHtml(inspection, flow, src);
