@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
@@ -40,6 +40,8 @@ export default function InspectionScreen({ route, navigation }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState<string | null>(null);
+  /** Required photo items still missing — blocks report generation. */
+  const [missing, setMissing] = useState<PhotoQueueItem[] | null>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: inspection ? `Claim ${inspection.claim.claimNumber || '—'}` : 'Inspection' });
@@ -89,6 +91,15 @@ export default function InspectionScreen({ route, navigation }: Props) {
   };
 
   const makeReport = async () => {
+    // Hard gate: every required photo in the walk (N/A sections excluded)
+    // must be captured or consciously skipped before the PDF can generate.
+    const missed = buildQueue(flow, inspection).filter(
+      (q): q is PhotoQueueItem => q.kind === 'photo' && !q.prompt.optional && !isDone(inspection, q),
+    );
+    if (missed.length) {
+      setMissing(missed);
+      return;
+    }
     setBusy(true);
     try {
       await generateReport(inspection, flow);
@@ -305,6 +316,41 @@ export default function InspectionScreen({ route, navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      {/* Report gate — missing required photos, each row jumps straight
+          to that shot in the camera. */}
+      <Modal visible={!!missing} transparent animationType="slide" onRequestClose={() => setMissing(null)}>
+        <View style={styles.missingBackdrop}>
+          <View style={styles.missingSheet}>
+            <Text style={styles.missingTitle}>Missing required photos ({missing?.length ?? 0})</Text>
+            <Text style={styles.missingSub}>
+              The report is blocked until every required photo is captured. Tap an item to shoot it now — or skip it
+              in the camera if it truly doesn't apply.
+            </Text>
+            <ScrollView style={{ maxHeight: 420 }}>
+              {(missing ?? []).map((q) => (
+                <Pressable
+                  key={q.key}
+                  style={styles.missingRow}
+                  onPress={() => {
+                    setMissing(null);
+                    navigation.navigate('Camera', { id, startKey: q.key });
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.missingSection}>{q.sectionTitle}{q.instance ? ` · ${q.instance}` : ''}</Text>
+                    <Text style={styles.missingLabel}>{q.label}</Text>
+                  </View>
+                  <Text style={styles.missingGo}>›</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.missingClose} onPress={() => setMissing(null)}>
+              <Text style={styles.missingCloseText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -345,4 +391,14 @@ const styles = StyleSheet.create({
   reportBtn: { backgroundColor: colors.navy, borderRadius: touch.radius, minHeight: touch.minHeight + 4, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   docsBtn: { backgroundColor: colors.white, borderWidth: 2, borderColor: colors.navy },
   reportText: { color: colors.white, fontSize: 17, fontWeight: '800' },
+  missingBackdrop: { flex: 1, backgroundColor: 'rgba(10,12,30,0.55)', justifyContent: 'flex-end' },
+  missingSheet: { backgroundColor: colors.offWhite, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.md, paddingBottom: spacing.xl },
+  missingTitle: { fontSize: 19, fontWeight: '800', color: colors.red, marginBottom: 4 },
+  missingSub: { fontSize: 13, color: colors.grayText, marginBottom: spacing.sm, fontWeight: '600' },
+  missingRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white, borderRadius: 10, borderWidth: 1, borderColor: colors.grayLine, paddingHorizontal: spacing.md, paddingVertical: 10, marginBottom: 6, gap: spacing.sm },
+  missingSection: { fontSize: 11, fontWeight: '800', color: colors.grayText, textTransform: 'uppercase', letterSpacing: 0.5 },
+  missingLabel: { fontSize: 15, fontWeight: '700', color: colors.ink, marginTop: 1 },
+  missingGo: { fontSize: 22, color: colors.red, fontWeight: '800' },
+  missingClose: { marginTop: spacing.sm, borderRadius: touch.radius, borderWidth: 1.5, borderColor: colors.grayLine, minHeight: touch.minHeight - 6, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
+  missingCloseText: { color: colors.grayText, fontSize: 15, fontWeight: '800' },
 });
