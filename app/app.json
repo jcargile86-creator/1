@@ -2,7 +2,7 @@
   "expo": {
     "name": "InspectPro",
     "slug": "inspectpro",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "runtimeVersion": { "policy": "appVersion" },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.jargile.inspectpro",
       "infoPlist": {
         "NSCameraUsageDescription": "InspectPro uses the camera for guided inspection photo capture.",
+        "NSLocationWhenInUseUsageDescription": "InspectPro can record the inspection location with photos to document the risk address.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -33,7 +34,8 @@
         "react-native-vision-camera",
         {
           "cameraPermissionText": "InspectPro uses the camera for guided inspection photo capture.",
-          "enableMicrophonePermission": false
+          "enableMicrophonePermission": false,
+          "enableLocation": false
         }
       ],
       [
