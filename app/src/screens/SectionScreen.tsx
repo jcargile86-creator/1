@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
-import { buildQueue, isDone, QueueItem } from '../flows/queue';
+import { buildQueue, isDone, PhotoQueueItem } from '../flows/queue';
 import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Section'>;
@@ -30,8 +30,8 @@ export default function SectionScreen({ route, navigation }: Props) {
     );
   }
 
-  const queue = buildQueue(flow, inspection, sectionId);
-  const groups: { title: string; instance?: string; data: QueueItem[] }[] = [];
+  const queue = buildQueue(flow, inspection, sectionId).filter((q): q is PhotoQueueItem => q.kind === 'photo');
+  const groups: { title: string; instance?: string; data: PhotoQueueItem[] }[] = [];
   if (section.repeat) {
     const instances = inspection.instances[sectionId] ?? [];
     for (const inst of instances) {
@@ -62,7 +62,7 @@ export default function SectionScreen({ route, navigation }: Props) {
     });
   };
 
-  const photoFor = (q: QueueItem) =>
+  const photoFor = (q: PhotoQueueItem) =>
     inspection.photos.filter((p) => p.sectionId === q.sectionId && p.promptId === q.prompt.id && p.instance === q.instance);
 
   return (
@@ -124,7 +124,7 @@ export default function SectionScreen({ route, navigation }: Props) {
       )}
       renderItem={({ item }) => {
         const photos = photoFor(item);
-        const done = isDone(inspection, item.key);
+        const done = isDone(inspection, item);
         const skipped = inspection.skipped[item.key];
         return (
           <Pressable

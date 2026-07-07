@@ -5,7 +5,7 @@ import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
 import { AreaTab, SectionDef, QuestionDef } from '../flows/types';
-import { buildQueue, firstPendingIndex, isDone } from '../flows/queue';
+import { buildQueue, firstPendingIndex, isDone, PhotoQueueItem } from '../flows/queue';
 import { answerKey } from '../types';
 import { generateReport } from '../report/generate';
 import PromptChecklist from '../components/PromptChecklist';
@@ -139,9 +139,11 @@ export default function InspectionScreen({ route, navigation }: Props) {
   const renderEntry = (entry: SubEntry) => {
     const section = flow.sections.find((s) => s.id === entry.sectionId);
     if (!section) return null;
-    const items = buildQueue(flow, inspection, entry.sectionId, entry.instance);
+    const items = buildQueue(flow, inspection, entry.sectionId, entry.instance).filter(
+      (i): i is PhotoQueueItem => i.kind === 'photo',
+    );
     const required = items.filter((i) => !i.prompt.optional);
-    const reqDone = required.filter((i) => isDone(inspection, i.key)).length;
+    const reqDone = required.filter((i) => isDone(inspection, i)).length;
     const photoCount = inspection.photos.filter((p) => p.sectionId === entry.sectionId && (!section.repeat || p.instance === entry.instance)).length;
     const na = inspection.sectionSkipped?.[entry.sectionId] === true;
     const complete = required.length > 0 && reqDone >= required.length;

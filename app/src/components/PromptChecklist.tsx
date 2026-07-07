@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
-import { QueueItem, isDone } from '../flows/queue';
+import { PhotoQueueItem, isDone } from '../flows/queue';
 import { SectionDef, QuestionDef } from '../flows/types';
 import { Inspection, answerKey } from '../types';
 import { colors, spacing } from '../theme';
 
 interface Props {
-  items: QueueItem[];
+  items: PhotoQueueItem[];
   inspection: Inspection;
-  onOpen: (item: QueueItem) => void;
+  onOpen: (item: PhotoQueueItem) => void;
   onToggleSkip: (key: string) => void;
   /** When provided with onAnswer, count-pair questions (total + damaged)
    *  attached to a prompt render as inline steppers on its row. */
@@ -21,7 +21,7 @@ interface CounterPair {
   damagedQ: QuestionDef;
 }
 
-function counterPairFor(section: SectionDef | undefined, item: QueueItem): CounterPair | null {
+function counterPairFor(section: SectionDef | undefined, item: PhotoQueueItem): CounterPair | null {
   if (!section) return null;
   const pool = item.instance ? section.instanceQuestions ?? [] : section.questions ?? [];
   const attached = pool.filter((q) => q.promptId === item.prompt.id && q.type === 'number');
@@ -39,7 +39,7 @@ export default function PromptChecklist({ items, inspection, onOpen, onToggleSki
         const photos = inspection.photos.filter(
           (p) => p.sectionId === item.sectionId && p.promptId === item.prompt.id && p.instance === item.instance,
         );
-        const done = isDone(inspection, item.key);
+        const done = isDone(inspection, item);
         const skipped = inspection.skipped[item.key];
         const pair = onAnswer ? counterPairFor(section, item) : null;
 

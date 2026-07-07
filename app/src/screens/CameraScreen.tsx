@@ -23,6 +23,7 @@ import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
 import { buildQueue, firstPendingIndex, isDone, QueueItem } from '../flows/queue';
+import { answerKey, AnswerValue } from '../types';
 import { persistPhoto, persistPreview } from '../store/photos';
 import { colors, spacing } from '../theme';
 
@@ -145,7 +146,7 @@ export default function CameraScreen({ route, navigation }: Props) {
     }
     if (sectionId) {
       const inSection = (q: QueueItem) => q.sectionId === sectionId && (instance === undefined || q.instance === instance);
-      const pend = queue.findIndex((q) => inSection(q) && !isDone(inspection, q.key));
+      const pend = queue.findIndex((q) => inSection(q) && !isDone(inspection, q));
       if (pend !== -1) return pend;
       const first = queue.findIndex(inSection);
       if (first !== -1) return first;
@@ -171,8 +172,9 @@ export default function CameraScreen({ route, navigation }: Props) {
 
   /** A detour = "saw something, shot it, come right back". Chip taps and
    *  banner taps jump elsewhere in the queue; confirming the shot returns
-   *  to `returnTo` (after walking any queued missed shots first). */
-  const [detour, setDetour] = useState<{ returnTo: number; nextKeys: string[] } | null>(null);
+   *  to the origin item (after walking any queued missed stops first).
+   *  Keys, not indexes — the queue reshapes as answers/photos land. */
+  const [detour, setDetour] = useState<{ returnToKey: string; nextKeys: string[] } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const suppressBannerRef = useRef(false);
 
@@ -204,12 +206,14 @@ export default function CameraScreen({ route, navigation }: Props) {
       return;
     }
     const [prevSection, prevInstance] = prev.split('|');
-    const missed = queue.filter(
-      (q) =>
-        q.sectionId === prevSection &&
-        (q.instance ?? '') === prevInstance &&
-        !inspection?.photos.some((ph) => ph.sectionId === q.sectionId && ph.promptId === q.prompt.id && ph.instance === q.instance),
-    );
+    const missed = queue.filter((q) => {
+      if (q.sectionId !== prevSection || (q.instance ?? '') !== prevInstance) return false;
+      if (q.kind === 'question') {
+        const v = inspection?.answers[answerKey(q.sectionId, q.question.id, q.instance)];
+        return v === undefined || v === '';
+      }
+      return !inspection?.photos.some((ph) => ph.sectionId === q.sectionId && ph.promptId === q.prompt.id && ph.instance === q.instance);
+    });
     const names = missed.slice(0, 3).map((q) => q.label).join(', ');
     setBanner({
       title: current!.sectionTitle,
@@ -234,6 +238,17 @@ export default function CameraScreen({ route, navigation }: Props) {
     if (queue.length > 0 && index >= queue.length && !pending) navigation.goBack();
   }, [index, queue.length, pending, navigation]);
 
+  /** Draft for text-type question stops — saved on Next, keyboard on tap. */
+  const [qDraft, setQDraft] = useState('');
+  useEffect(() => {
+    if (current?.kind === 'question') {
+      const v = inspection?.answers[answerKey(current.sectionId, current.question.id, current.instance)];
+      setQDraft(v === undefined ? '' : String(v));
+    } else {
+      setQDraft('');
+    }
+  }, [current?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!inspection || !flow) return null;
 
   if (!hasPermission) {
@@ -250,63 +265,96 @@ export default function CameraScreen({ route, navigation }: Props) {
     );
   }
 
-  const doneCount = queue.filter((q) => isDone(inspection, q.key)).length;
+  const doneCount = queue.filter((q) => isDone(inspection, q)).length;
 
   const hasPhoto = (q: QueueItem) =>
+    q.kind === 'photo' &&
     inspection.photos.some((ph) => ph.sectionId === q.sectionId && ph.promptId === q.prompt.id && ph.instance === q.instance);
+
+  /** Photo taken / question answered — skips don't count as content. */
+  const contentDone = (q: QueueItem) => {
+    if (q.kind === 'photo') return hasPhoto(q);
+    const v = inspection.answers[answerKey(q.sectionId, q.question.id, q.instance)];
+    return v !== undefined && v !== '';
+  };
+
+  /** The stored answer for the current question stop, if any. */
+  const storedAns: AnswerValue | undefined =
+    current?.kind === 'question' ? inspection.answers[answerKey(current.sectionId, current.question.id, current.instance)] : undefined;
 
   /** Quick-grab chips: the sometimes-there items of the block you're
    *  standing in — tap when you see one, shoot, and return automatically. */
   const quickChips = current
     ? queue.filter(
-        (q) => q.sectionId === current.sectionId && q.instance === current.instance && q.prompt.optional && q.key !== current.key,
+        (q) =>
+          q.kind === 'photo' &&
+          q.sectionId === current.sectionId &&
+          q.instance === current.instance &&
+          q.prompt.optional &&
+          q.key !== current.key,
       )
     : [];
 
   const startDetour = (key: string) => {
     const idx = queue.findIndex((q) => q.key === key);
-    if (idx === -1 || idx === index) return;
-    setDetour((d) => d ?? { returnTo: index, nextKeys: [] });
+    if (idx === -1 || idx === index || !current) return;
+    setDetour((d) => d ?? { returnToKey: current.key, nextKeys: [] });
     jumpTo(idx);
   };
 
-  /** Tap on the banner's "not shot" line: walk the missed items as one
+  /** Tap on the banner's "missed" line: walk the missed items as one
    *  detour chain, then come back to where the walk had progressed to. */
   const reviewMissed = () => {
-    if (!banner || banner.missedKeys.length === 0) return;
+    if (!banner || banner.missedKeys.length === 0 || !current) return;
     bannerAnim.current?.stop();
     setBanner(null);
     const [first, ...rest] = banner.missedKeys;
     const idx = queue.findIndex((q) => q.key === first);
     if (idx === -1) return;
-    setDetour({ returnTo: index, nextKeys: rest });
+    setDetour({ returnToKey: current.key, nextKeys: rest });
     jumpTo(idx);
   };
 
   const advance = () => setIndex((i) => Math.min(i + 1, queue.length));
 
-  /** Move on after a shot/skip: continue a detour chain, return from a
-   *  detour, or just advance down the walk. */
+  const jumpToKey = (key: string) => {
+    const idx = queue.findIndex((q) => q.key === key);
+    if (idx === -1) advance();
+    else jumpTo(idx);
+  };
+
+  /** Move on after a shot/answer/skip: continue a detour chain, return
+   *  from a detour, or just advance down the walk. */
   const advanceOrReturn = () => {
     if (!detour) {
       advance();
       return;
     }
     const [nextKey, ...rest] = detour.nextKeys;
-    const idx = nextKey ? queue.findIndex((q) => q.key === nextKey) : -1;
-    if (idx !== -1) {
+    if (nextKey !== undefined) {
       setDetour({ ...detour, nextKeys: rest });
-      jumpTo(idx);
+      jumpToKey(nextKey);
     } else {
-      jumpTo(Math.min(detour.returnTo, queue.length));
       setDetour(null);
+      jumpToKey(detour.returnToKey);
     }
+  };
+
+  /** Answer the current question stop; yes/no & choice advance instantly. */
+  const setAnswer = (v: AnswerValue, autoAdvance = true) => {
+    if (!current || current.kind !== 'question') return;
+    const item = current;
+    void updateInspection(inspection.id, (d) => {
+      d.answers[answerKey(item.sectionId, item.question.id, item.instance)] = v;
+      delete d.skipped[item.key];
+    });
+    if (autoAdvance) advanceOrReturn();
   };
 
   /** Shutter tap: the caption card opens INSTANTLY with the smart default;
    *  the photo is captured, processed, and saved in the background. */
   const capture = (stay: boolean) => {
-    if (!cameraRef.current || !current || pending) return;
+    if (!cameraRef.current || !current || current.kind !== 'photo' || pending) return;
     const shot = current;
     const photoId = Crypto.randomUUID();
     const takenAt = new Date().toISOString();
@@ -426,11 +474,11 @@ export default function CameraScreen({ route, navigation }: Props) {
   };
 
   /** Back cancels an active detour (returns to the walk); otherwise steps
-   *  one shot back. */
+   *  one stop back. */
   const goBackOne = () => {
     if (detour) {
-      jumpTo(Math.min(detour.returnTo, Math.max(queue.length - 1, 0)));
       setDetour(null);
+      jumpToKey(detour.returnToKey);
       return;
     }
     setIndex((i) => Math.max(0, i - 1));
@@ -498,15 +546,21 @@ export default function CameraScreen({ route, navigation }: Props) {
         {current ? (
           <>
             <View style={styles.tagRow}>
-              <Text style={styles.sectionTag}>{current.sectionTitle}{current.instance ? ` · ${current.instance}` : ''}{isDone(inspection, current.key) ? ' · ✓ captured' : ''}</Text>
-              {!current.prompt.optional && (
+              <Text style={styles.sectionTag}>{current.sectionTitle}{current.instance ? ` · ${current.instance}` : ''}{isDone(inspection, current) ? (current.kind === 'photo' ? ' · ✓ captured' : ' · ✓ answered') : ''}</Text>
+              {current.kind === 'photo' && !current.prompt.optional && (
                 <View style={[styles.badge, styles.badgeRequired]}>
                   <Text style={styles.badgeText}>REQUIRED</Text>
                 </View>
               )}
+              {current.kind === 'question' && (
+                <View style={[styles.badge, styles.badgeQuestion]}>
+                  <Text style={styles.badgeText}>QUESTION</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.label}>{current.label}</Text>
-            {current.prompt.hint ? <Text style={styles.hint}>{current.prompt.hint}</Text> : null}
+            {current.kind === 'photo' && current.prompt.hint ? <Text style={styles.hint}>{current.prompt.hint}</Text> : null}
+            {current.kind === 'question' && current.question.group ? <Text style={styles.hint}>{current.question.group}</Text> : null}
           </>
         ) : null}
       </View>
@@ -515,7 +569,7 @@ export default function CameraScreen({ route, navigation }: Props) {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         {detour && (
           <Text style={styles.detourText} numberOfLines={1}>
-            After this: back to “{queue[detour.returnTo]?.label ?? 'previous shot'}”
+            After this: back to “{queue.find((q) => q.key === detour.returnToKey)?.label ?? 'previous shot'}”
           </Text>
         )}
         <ScrollView
@@ -529,7 +583,7 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Pressable key={q.key} style={styles.quickChip} onPress={() => startDetour(q.key)}>
               <Text style={styles.quickChipText} numberOfLines={1}>
                 {hasPhoto(q) ? '✓ ' : '+ '}
-                {q.prompt.label.replace(' {instance}', '').replace('{instance} ', '')}
+                {q.prompt!.label.replace(' {instance}', '').replace('{instance} ', '')}
               </Text>
             </Pressable>
           ))}
@@ -537,28 +591,97 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.quickChipText}>Jump to…</Text>
           </Pressable>
         </ScrollView>
-        <View style={styles.bottomRow}>
-          <Pressable onPress={goBackOne} style={styles.sideBtn} hitSlop={10}>
-            <Text style={styles.sideText}>{detour ? '‹ Return' : '‹ Back'}</Text>
-          </Pressable>
+        {current?.kind === 'question' ? (
+          <>
+            {/* Question stop — answer right here, no photo expected. */}
+            {current.question.type === 'yesno' && (
+              <View style={styles.answerRow}>
+                {[true, false].map((v) => (
+                  <Pressable key={String(v)} style={[styles.ansBtn, storedAns === v && styles.ansBtnActive]} onPress={() => setAnswer(v)}>
+                    <Text style={styles.ansBtnText}>{v ? 'Yes' : 'No'}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {current.question.type === 'choice' && (
+              <View style={styles.answerWrap}>
+                {(current.question.choices ?? []).map((c) => (
+                  <Pressable key={c} style={[styles.ansChip, storedAns === c && styles.ansBtnActive]} onPress={() => setAnswer(c)}>
+                    <Text style={styles.ansChipText}>{c}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {current.question.type === 'number' && (
+              <View style={styles.answerRow}>
+                <Pressable style={styles.stepBtn} onPress={() => setAnswer(Math.max(0, (typeof storedAns === 'number' ? storedAns : 0) - 1), false)}>
+                  <Text style={styles.stepText}>−</Text>
+                </Pressable>
+                <Text style={styles.numVal}>{typeof storedAns === 'number' ? storedAns : 0}</Text>
+                <Pressable style={styles.stepBtn} onPress={() => setAnswer((typeof storedAns === 'number' ? storedAns : 0) + 1, false)}>
+                  <Text style={styles.stepText}>＋</Text>
+                </Pressable>
+                <Pressable style={styles.ansNext} onPress={advanceOrReturn}>
+                  <Text style={styles.ansNextText}>Next →</Text>
+                </Pressable>
+              </View>
+            )}
+            {(current.question.type === 'text' || current.question.type === 'multilineText') && (
+              <View>
+                <TextInput
+                  style={styles.ansInput}
+                  value={qDraft}
+                  onChangeText={setQDraft}
+                  multiline={current.question.type === 'multilineText'}
+                  placeholder="Type answer…"
+                  placeholderTextColor="#9aa"
+                />
+                <Pressable
+                  style={[styles.ansNext, { marginTop: spacing.sm, alignSelf: 'stretch' }]}
+                  onPress={() => {
+                    if (qDraft.trim()) setAnswer(qDraft.trim(), false);
+                    advanceOrReturn();
+                  }}
+                >
+                  <Text style={styles.ansNextText}>Next →</Text>
+                </Pressable>
+              </View>
+            )}
+            <View style={styles.bottomRow}>
+              <Pressable onPress={goBackOne} style={styles.sideBtn} hitSlop={10}>
+                <Text style={styles.sideText}>{detour ? '‹ Return' : '‹ Back'}</Text>
+              </Pressable>
+              <Pressable onPress={skip} style={styles.sideBtn} hitSlop={10}>
+                <Text style={styles.sideText}>Skip ›</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.bottomRow}>
+              <Pressable onPress={goBackOne} style={styles.sideBtn} hitSlop={10}>
+                <Text style={styles.sideText}>{detour ? '‹ Return' : '‹ Back'}</Text>
+              </Pressable>
 
-          <Pressable onPress={() => capture(false)} style={styles.shutter} disabled={!current || !!pending}>
-            <View style={styles.shutterInner} />
-          </Pressable>
+              <Pressable onPress={() => capture(false)} style={styles.shutter} disabled={!current || !!pending}>
+                <View style={styles.shutterInner} />
+              </Pressable>
 
-          <Pressable onPress={skip} style={styles.sideBtn} hitSlop={10} disabled={!current}>
-            <Text style={styles.sideText}>Skip ›</Text>
-          </Pressable>
-        </View>
-        <View style={styles.bottomRow2}>
-          {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
-          <Pressable onPress={() => capture(true)} style={styles.extraBtn} disabled={!current || !!pending}>
-            <Text style={styles.extraText}>Extra shot</Text>
-          </Pressable>
-          <Pressable onPress={skipSection} style={styles.extraBtn} disabled={!current}>
-            <Text style={styles.extraText}>N/A Section</Text>
-          </Pressable>
-        </View>
+              <Pressable onPress={skip} style={styles.sideBtn} hitSlop={10} disabled={!current}>
+                <Text style={styles.sideText}>Skip ›</Text>
+              </Pressable>
+            </View>
+            <View style={styles.bottomRow2}>
+              {lastThumb ? <Image source={{ uri: lastThumb }} style={styles.lastThumb} /> : <View style={styles.lastThumb} />}
+              <Pressable onPress={() => capture(true)} style={styles.extraBtn} disabled={!current || !!pending}>
+                <Text style={styles.extraText}>Extra shot</Text>
+              </Pressable>
+              <Pressable onPress={skipSection} style={styles.extraBtn} disabled={!current}>
+                <Text style={styles.extraText}>N/A Section</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
 
       {/* Section-change interstitial — fades in over the live camera and
@@ -603,7 +726,7 @@ export default function CameraScreen({ route, navigation }: Props) {
                   );
                   lastHeader = header;
                 }
-                const done = hasPhoto(q);
+                const done = contentDone(q);
                 rows.push(
                   <Pressable
                     key={q.key}
@@ -616,7 +739,7 @@ export default function CameraScreen({ route, navigation }: Props) {
                     <Text style={[styles.pickerRowText, done && styles.pickerRowDone]} numberOfLines={1}>
                       {q.label}
                     </Text>
-                    <Text style={styles.pickerRowMark}>{done ? '✓' : !q.prompt.optional ? 'REQ' : ''}</Text>
+                    <Text style={styles.pickerRowMark}>{done ? '✓' : q.kind === 'question' ? 'Q' : !q.prompt.optional ? 'REQ' : ''}</Text>
                   </Pressable>,
                 );
               }
@@ -652,7 +775,7 @@ export default function CameraScreen({ route, navigation }: Props) {
                 placeholderTextColor="#9aa"
               />
               <View style={styles.chipsWrap}>
-                {current && suggestTerms(current.sectionId, current.prompt.id).map((t) => (
+                {current?.kind === 'photo' && suggestTerms(current.sectionId, current.prompt.id).map((t) => (
                   <Pressable key={t} style={styles.chip} onPress={() => appendTerm(t)}>
                     <Text style={styles.chipText}>+ {t}</Text>
                   </Pressable>
@@ -693,6 +816,20 @@ const styles = StyleSheet.create({
   sectionTag: { color: '#9fa5d6', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 1 },
   badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   badgeRequired: { backgroundColor: colors.red },
+  badgeQuestion: { backgroundColor: '#3949ab' },
+  answerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  answerWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
+  ansBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 12, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  ansBtnActive: { backgroundColor: colors.red },
+  ansBtnText: { color: colors.white, fontSize: 19, fontWeight: '800' },
+  ansChip: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  ansChipText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  stepBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  stepText: { color: colors.white, fontSize: 24, fontWeight: '800', lineHeight: 28 },
+  numVal: { color: colors.white, fontSize: 26, fontWeight: '800', minWidth: 44, textAlign: 'center' },
+  ansNext: { flex: 1, backgroundColor: colors.red, borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  ansNextText: { color: colors.white, fontSize: 17, fontWeight: '800' },
+  ansInput: { backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 16, fontWeight: '600', color: colors.white, maxHeight: 100 },
   badgeText: { color: colors.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   label: { color: colors.white, fontSize: 22, fontWeight: '800', marginTop: 2 },
   hint: { color: '#d5d8f2', fontSize: 13, marginTop: 4 },
