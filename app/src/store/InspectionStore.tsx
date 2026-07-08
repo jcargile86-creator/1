@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { Paths } from 'expo-file-system';
 import { Inspection, ClaimInfo, ClaimStatus } from '../types';
 import { DEFAULT_FLOW_ID, getFlow } from '../flows';
+import { useAuth } from './AuthStore';
 
 export interface AssignmentMeta {
   assignedAt?: string;
@@ -11,7 +12,10 @@ export interface AssignmentMeta {
   source?: 'xact' | 'manual';
 }
 
-const INDEX_KEY = 'inspectpro/index';
+/** Legacy (pre-accounts) index — adopted by the dev account on first load. */
+const LEGACY_INDEX_KEY = 'inspectpro/index';
+/** Each inspector's claims live under their own index. */
+const indexKey = (userId: string) => `inspectpro/index/${userId}`;
 const itemKey = (id: string) => `inspectpro/inspection/${id}`;
 
 interface StoreShape {
@@ -57,19 +61,35 @@ function rebaseInspection(x: Inspection): Inspection {
 }
 
 export function InspectionProvider({ children }: { children: React.ReactNode }) {
+  const { currentUser } = useAuth();
+  const userId = currentUser?.id ?? null;
   const [loading, setLoading] = useState(true);
   const [inspections, setInspections] = useState<Inspection[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true);
       try {
-        const idxRaw = await AsyncStorage.getItem(INDEX_KEY);
+        if (!userId) {
+          if (!cancelled) setInspections([]);
+          return;
+        }
+        // The dev account adopts any pre-accounts inspections on first run so
+        // existing test data isn't stranded.
+        if (currentUser?.isDev && !(await AsyncStorage.getItem(indexKey(userId)))) {
+          const legacy = await AsyncStorage.getItem(LEGACY_INDEX_KEY);
+          if (legacy) {
+            await AsyncStorage.setItem(indexKey(userId), legacy);
+            await AsyncStorage.removeItem(LEGACY_INDEX_KEY);
+          }
+        }
+        const idxRaw = await AsyncStorage.getItem(indexKey(userId));
         const ids: string[] = idxRaw ? JSON.parse(idxRaw) : [];
         const rows = await AsyncStorage.multiGet(ids.map(itemKey));
         const items = rows
           .map(([, v]) => (v ? (JSON.parse(v) as Inspection) : null))
           .filter((x): x is Inspection => !!x)
-          // migrate records saved before newer fields existed
           // migrate: pre-lifecycle records are in-progress manual walk-ins
           .map((x) =>
             rebaseInspection({
@@ -84,19 +104,37 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
             }),
           )
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-        setInspections(items);
+        if (!cancelled) setInspections(items);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, currentUser?.isDev]);
 
-  const persist = useCallback(async (items: Inspection[]) => {
-    await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(items.map((i) => i.id)));
-  }, []);
+  const persist = useCallback(
+    async (items: Inspection[]) => {
+      if (!userId) return;
+      await AsyncStorage.setItem(indexKey(userId), JSON.stringify(items.map((i) => i.id)));
+    },
+    [userId],
+  );
+
+  /** Default the inspector name/contact from the signed-in account. */
+  const withInspector = useCallback(
+    (claim: ClaimInfo): ClaimInfo => ({
+      ...claim,
+      inspector: claim.inspector || currentUser?.displayName || '',
+      inspectorContact: claim.inspectorContact || currentUser?.contact || '',
+    }),
+    [currentUser?.displayName, currentUser?.contact],
+  );
 
   const createInspection = useCallback(
-    async (claim: ClaimInfo, flowId: string = DEFAULT_FLOW_ID) => {
+    async (claimIn: ClaimInfo, flowId: string = DEFAULT_FLOW_ID) => {
+      const claim = withInspector(claimIn);
       const flow = getFlow(flowId);
       const instances: Record<string, string[]> = {};
       for (const s of flow.sections) {
@@ -131,11 +169,12 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
       });
       return insp;
     },
-    [persist],
+    [persist, withInspector],
   );
 
   const createAssignment = useCallback(
-    async (claim: ClaimInfo, meta: AssignmentMeta = {}, flowId: string = DEFAULT_FLOW_ID) => {
+    async (claimIn: ClaimInfo, meta: AssignmentMeta = {}, flowId: string = DEFAULT_FLOW_ID) => {
+      const claim = withInspector(claimIn);
       const flow = getFlow(flowId);
       const instances: Record<string, string[]> = {};
       for (const s of flow.sections) {
@@ -170,7 +209,7 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
       });
       return insp;
     },
-    [persist],
+    [persist, withInspector],
   );
 
   const updateInspection = useCallback(

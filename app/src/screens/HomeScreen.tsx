@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, Alert, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
+import { useAuth } from '../store/AuthStore';
 import { deleteInspectionPhotos } from '../store/photos';
 import { Inspection, ClaimStatus } from '../types';
 import {
@@ -25,7 +26,28 @@ type Tab = 'pending' | 'calendar' | 'active' | 'done';
 
 export default function HomeScreen({ navigation }: Props) {
   const { inspections, loading, deleteInspection, acceptInspection, declineInspection } = useInspections();
+  const { currentUser, signOut } = useAuth();
   const [tab, setTab] = useState<Tab>('pending');
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          hitSlop={10}
+          onPress={() =>
+            Alert.alert(currentUser?.displayName ?? 'Inspector', `Signed in as ${currentUser?.username ?? ''}`, [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign Out', style: 'destructive', onPress: () => void signOut() },
+            ])
+          }
+        >
+          <Text style={styles.headerUser} numberOfLines={1}>
+            {(currentUser?.displayName ?? '').split(' ')[0] || 'Account'} ⌄
+          </Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation, currentUser, signOut]);
 
   const groups = useMemo(() => {
     const g: Record<ClaimStatus, Inspection[]> = { pending: [], in_progress: [], completed: [], declined: [] };
@@ -309,6 +331,7 @@ const styles = StyleSheet.create({
   declinedPillText: { color: colors.white, fontSize: 10, fontWeight: '800' },
   chev: { fontSize: 26, color: colors.grayLine, marginLeft: spacing.sm },
   versionStamp: { textAlign: 'center', color: colors.grayLine, fontSize: 11, paddingVertical: 4 },
+  headerUser: { color: colors.white, fontSize: 15, fontWeight: '800', maxWidth: 140 },
   // calendar
   calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   calNav: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
