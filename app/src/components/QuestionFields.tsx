@@ -52,23 +52,43 @@ export default function QuestionFields({ inspection, sectionId, instance, questi
               )}
               {q.type === 'choice' && (
                 <View style={styles.rowChoices}>
-                  {(q.choices ?? []).map((c) => (
-                    <Pressable key={c} style={[styles.choice, getVal(q) === c && styles.choiceActive]} onPress={() => onAnswer(q.id, c)}>
-                      <Text style={[styles.choiceText, getVal(q) === c && styles.choiceTextActive]}>{c}</Text>
-                    </Pressable>
-                  ))}
+                  {(q.choices ?? []).map((c) => {
+                    const selected = q.multi
+                      ? String(getVal(q) ?? '').split(', ').includes(c)
+                      : getVal(q) === c;
+                    return (
+                      <Pressable
+                        key={c}
+                        style={[styles.choice, selected && styles.choiceActive]}
+                        onPress={() => {
+                          if (!q.multi) {
+                            onAnswer(q.id, c);
+                            return;
+                          }
+                          const cur = String(getVal(q) ?? '').split(', ').filter(Boolean);
+                          const next = cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c];
+                          onAnswer(q.id, next.join(', '));
+                        }}
+                      >
+                        <Text style={[styles.choiceText, selected && styles.choiceTextActive]}>{c}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               )}
               {(q.type === 'text' || q.type === 'number') && (
                 <>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType={q.type === 'number' ? 'numeric' : 'default'}
-                    value={getVal(q) !== undefined ? String(getVal(q)) : autoCount(q) !== undefined && autoCount(q)! > 0 ? String(autoCount(q)) : ''}
-                    placeholder={autoCount(q) !== undefined ? String(autoCount(q)) : undefined}
-                    placeholderTextColor={colors.grayText}
-                    onChangeText={(t) => onAnswer(q.id, q.type === 'number' ? (t === '' ? '' : Number(t.replace(/[^0-9.\-]/g, '')) || 0) : t)}
-                  />
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      keyboardType={q.type === 'number' ? 'numeric' : 'default'}
+                      value={getVal(q) !== undefined ? String(getVal(q)) : autoCount(q) !== undefined && autoCount(q)! > 0 ? String(autoCount(q)) : ''}
+                      placeholder={autoCount(q) !== undefined ? String(autoCount(q)) : undefined}
+                      placeholderTextColor={colors.grayText}
+                      onChangeText={(t) => onAnswer(q.id, q.type === 'number' ? (t === '' ? '' : Number(t.replace(/[^0-9.\-]/g, '')) || 0) : t)}
+                    />
+                    {q.unit ? <Text style={styles.unit}>{q.unit}</Text> : null}
+                  </View>
                   {autoCount(q) !== undefined && (
                     <Text style={styles.autoHint}>
                       Auto-counted from photos taken: {autoCount(q)}{getVal(q) !== undefined ? ' (overridden)' : ''}
@@ -102,6 +122,8 @@ const styles = StyleSheet.create({
   choiceText: { fontSize: 14, fontWeight: '700', color: colors.ink },
   choiceTextActive: { color: colors.white },
   input: { backgroundColor: colors.offWhite, borderRadius: 10, borderWidth: 1, borderColor: colors.grayLine, paddingHorizontal: spacing.md, minHeight: touch.minHeight - 8, fontSize: 16, color: colors.ink },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  unit: { fontSize: 15, fontWeight: '800', color: colors.grayText },
   multiline: { minHeight: 100, textAlignVertical: 'top', paddingTop: spacing.sm, backgroundColor: colors.white },
   autoHint: { fontSize: 11, color: colors.grayText, marginTop: 4, fontWeight: '600' },
 });

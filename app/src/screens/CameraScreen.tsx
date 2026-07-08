@@ -176,6 +176,7 @@ export default function CameraScreen({ route, navigation }: Props) {
    *  Keys, not indexes — the queue reshapes as answers/photos land. */
   const [detour, setDetour] = useState<{ returnToKey: string; nextKeys: string[] } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
   const suppressBannerRef = useRef(false);
 
   /** Jump that crosses into another section/instance shouldn't replay the
@@ -349,6 +350,13 @@ export default function CameraScreen({ route, navigation }: Props) {
       delete d.skipped[item.key];
     });
     if (autoAdvance) advanceOrReturn();
+  };
+
+  /** Multi-answer choice: toggle in/out of the comma-joined answer. */
+  const toggleMultiAnswer = (c: string) => {
+    const cur = String(storedAns ?? '').split(', ').filter(Boolean);
+    const next = cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c];
+    setAnswer(next.join(', '), false);
   };
 
   /** Shutter tap: the caption card opens INSTANTLY with the smart default;
@@ -588,7 +596,13 @@ export default function CameraScreen({ route, navigation }: Props) {
               </Text>
             </Pressable>
           ))}
-          <Pressable style={[styles.quickChip, styles.quickChipMore]} onPress={() => setPickerOpen(true)}>
+          <Pressable
+            style={[styles.quickChip, styles.quickChipMore]}
+            onPress={() => {
+              setPickerQuery('');
+              setPickerOpen(true);
+            }}
+          >
             <Text style={styles.quickChipText}>Jump to…</Text>
           </Pressable>
         </ScrollView>
@@ -605,27 +619,56 @@ export default function CameraScreen({ route, navigation }: Props) {
               </View>
             )}
             {current.question.type === 'choice' && (
-              <View style={styles.answerWrap}>
-                {(current.question.choices ?? []).map((c) => (
-                  <Pressable key={c} style={[styles.ansChip, storedAns === c && styles.ansBtnActive]} onPress={() => setAnswer(c)}>
-                    <Text style={styles.ansChipText}>{c}</Text>
+              <>
+                <View style={styles.answerWrap}>
+                  {(current.question.choices ?? []).map((c) => {
+                    const selected = current.question!.multi
+                      ? String(storedAns ?? '').split(', ').includes(c)
+                      : storedAns === c;
+                    return (
+                      <Pressable
+                        key={c}
+                        style={[styles.ansChip, selected && styles.ansBtnActive]}
+                        onPress={() => (current.question!.multi ? toggleMultiAnswer(c) : setAnswer(c))}
+                      >
+                        <Text style={styles.ansChipText}>{c}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {current.question.multi && (
+                  <Pressable style={[styles.ansNext, { marginBottom: spacing.sm }]} onPress={advanceOrReturn}>
+                    <Text style={styles.ansNextText}>Next →</Text>
                   </Pressable>
-                ))}
-              </View>
+                )}
+              </>
             )}
             {current.question.type === 'number' && (
-              <View style={styles.answerRow}>
-                <Pressable style={styles.stepBtn} onPress={() => setAnswer(Math.max(0, (typeof storedAns === 'number' ? storedAns : 0) - 1), false)}>
-                  <Text style={styles.stepText}>−</Text>
-                </Pressable>
-                <Text style={styles.numVal}>{typeof storedAns === 'number' ? storedAns : 0}</Text>
-                <Pressable style={styles.stepBtn} onPress={() => setAnswer((typeof storedAns === 'number' ? storedAns : 0) + 1, false)}>
-                  <Text style={styles.stepText}>＋</Text>
-                </Pressable>
-                <Pressable style={styles.ansNext} onPress={advanceOrReturn}>
-                  <Text style={styles.ansNextText}>Next →</Text>
-                </Pressable>
-              </View>
+              <>
+                {/* One-tap number pad — no keyboard in the walk. */}
+                <View style={styles.answerWrap}>
+                  {Array.from({ length: 11 }, (_, n) => (
+                    <Pressable key={n} style={[styles.numChip, storedAns === n && styles.ansBtnActive]} onPress={() => setAnswer(n)}>
+                      <Text style={styles.ansChipText}>{n}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.answerRow}>
+                  <Pressable style={styles.stepBtn} onPress={() => setAnswer(Math.max(0, (typeof storedAns === 'number' ? storedAns : 0) - 1), false)}>
+                    <Text style={styles.stepText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.numVal}>
+                    {typeof storedAns === 'number' ? storedAns : 0}
+                    {current.question.unit ? <Text style={styles.unitText}> {current.question.unit}</Text> : null}
+                  </Text>
+                  <Pressable style={styles.stepBtn} onPress={() => setAnswer((typeof storedAns === 'number' ? storedAns : 0) + 1, false)}>
+                    <Text style={styles.stepText}>＋</Text>
+                  </Pressable>
+                  <Pressable style={styles.ansNext} onPress={advanceOrReturn}>
+                    <Text style={styles.ansNextText}>Next →</Text>
+                  </Pressable>
+                </View>
+              </>
             )}
             {(current.question.type === 'text' || current.question.type === 'multilineText') && (
               <View>
@@ -715,11 +758,34 @@ export default function CameraScreen({ route, navigation }: Props) {
               <Text style={styles.closeText}>✕</Text>
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }}>
+          <View style={{ paddingHorizontal: spacing.md }}>
+            <TextInput
+              style={styles.pickerSearch}
+              value={pickerQuery}
+              onChangeText={setPickerQuery}
+              placeholder="Search shots & questions…"
+              placeholderTextColor="#9aa"
+              autoCorrect={false}
+            />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
             {(() => {
+              const needle = pickerQuery.trim().toLowerCase();
+              const list = needle
+                ? queue.filter((q) =>
+                    `${q.label} ${q.sectionTitle} ${q.instance ?? ''}`.toLowerCase().includes(needle),
+                  )
+                : queue;
               const rows: React.ReactNode[] = [];
+              if (needle && list.length === 0) {
+                rows.push(
+                  <Text key="none" style={{ color: '#9aa', textAlign: 'center', marginTop: spacing.md }}>
+                    No matches.
+                  </Text>,
+                );
+              }
               let lastHeader = '';
-              for (const q of queue) {
+              for (const q of list) {
                 const header = `${q.sectionTitle}${q.instance ? ` · ${q.instance}` : ''}`;
                 if (header !== lastHeader) {
                   rows.push(
@@ -831,6 +897,9 @@ const styles = StyleSheet.create({
   ansNext: { flex: 1, backgroundColor: colors.red, borderRadius: 12, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
   ansNextText: { color: colors.white, fontSize: 17, fontWeight: '800' },
   ansInput: { backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 16, fontWeight: '600', color: colors.white, maxHeight: 100 },
+  numChip: { minWidth: 46, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
+  unitText: { fontSize: 15, fontWeight: '700', color: '#c6c9e8' },
+  pickerSearch: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 16, color: colors.white },
   badgeText: { color: colors.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   label: { color: colors.white, fontSize: 22, fontWeight: '800', marginTop: 2 },
   hint: { color: '#d5d8f2', fontSize: 13, marginTop: 4 },

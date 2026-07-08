@@ -24,6 +24,10 @@ export interface QuestionDef {
   /** Render this question inline at the top of its sub-section (e.g. test
    *  square size — it must be answered before quadrant prompts generate). */
   pinned?: boolean;
+  /** Measurement unit rendered after the input (e.g. 'SqFt', 'linear ft'). */
+  unit?: string;
+  /** Choice questions that accept multiple answers (stored comma-joined). */
+  multi?: boolean;
 }
 
 export interface PromptDef {
