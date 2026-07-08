@@ -17,12 +17,12 @@ import { colors, spacing, touch } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'Inspection'>;
 
 /** Bottom-nav stops in natural inspection-walk order. */
-const AREA_TABS: { key: AreaTab; label: string; icon: string }[] = [
-  { key: 'start', label: 'Start', icon: '🚩' },
-  { key: 'elevations', label: 'Elev', icon: '🏠' },
-  { key: 'roof', label: 'Roof', icon: '🔺' },
-  { key: 'inside', label: 'Inside', icon: '🛋' },
-  { key: 'wrapup', label: 'Wrap-Up', icon: '✅' },
+const AREA_TABS: { key: AreaTab; label: string }[] = [
+  { key: 'start', label: 'Start' },
+  { key: 'elevations', label: 'Elev' },
+  { key: 'roof', label: 'Roof' },
+  { key: 'inside', label: 'Inside' },
+  { key: 'wrapup', label: 'Wrap-Up' },
 ];
 
 interface SubEntry {
@@ -373,9 +373,8 @@ export default function InspectionScreen({ route, navigation }: Props) {
         {AREA_TABS.map((t) => {
           const active = area === t.key;
           return (
-            <Pressable key={t.key} style={styles.navItem} onPress={() => setArea(t.key)}>
+            <Pressable key={t.key} style={[styles.navItem, active && styles.navItemActive]} onPress={() => setArea(t.key)}>
               <View style={[styles.navIndicator, active && styles.navIndicatorActive]} />
-              <Text style={[styles.navIcon, !active && styles.navIconInactive]}>{t.icon}</Text>
               <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={1}>{t.label}</Text>
             </Pressable>
           );
@@ -425,13 +424,12 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   resumeBtn: { backgroundColor: colors.red, margin: spacing.md, marginBottom: spacing.sm, borderRadius: touch.radius, minHeight: touch.minHeight, alignItems: 'center', justifyContent: 'center' },
   resumeText: { color: colors.white, fontSize: 18, fontWeight: '800' },
-  bottomNav: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.grayLine, paddingTop: 6 },
-  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 2 },
-  navIndicator: { height: 3, width: 26, borderRadius: 2, backgroundColor: 'transparent', marginBottom: 4 },
+  bottomNav: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.grayLine, paddingTop: 8 },
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
+  navItemActive: {},
+  navIndicator: { height: 3, width: 28, borderRadius: 2, backgroundColor: 'transparent', marginBottom: 6 },
   navIndicatorActive: { backgroundColor: colors.red },
-  navIcon: { fontSize: 20 },
-  navIconInactive: { opacity: 0.45 },
-  navLabel: { fontSize: 11, fontWeight: '800', color: colors.grayText, marginTop: 2 },
+  navLabel: { fontSize: 13, fontWeight: '800', color: colors.grayText },
   navLabelActive: { color: colors.navy },
   content: { flex: 1 },
   entryCard: { backgroundColor: colors.white, borderRadius: touch.radius, borderWidth: 1, borderColor: colors.grayLine, marginBottom: spacing.sm, overflow: 'hidden' },

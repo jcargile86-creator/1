@@ -25,7 +25,7 @@ export default function HomeScreen({ navigation }: Props) {
       headerRight: () => (
         <View style={styles.headerRow}>
           <Pressable hitSlop={10} onPress={() => navigation.navigate('Calendar')} style={styles.calIconBtn}>
-            <Text style={styles.calIcon}>🗓</Text>
+            <Text style={styles.calIcon}>Calendar</Text>
           </Pressable>
           <Pressable
             hitSlop={10}
@@ -132,7 +132,7 @@ export default function HomeScreen({ navigation }: Props) {
                 <Text style={styles.cardSub}>Claim {item.claim.claimNumber || '—'} · {item.claim.lossAddress || 'no address'}</Text>
                 <Text style={styles.assignLine}>Assigned {relativeSince(item.assignedAt ?? item.createdAt)}</Text>
                 {item.scheduledAt ? (
-                  <Text style={styles.schedLine}>📅 {formatDateTime(item.scheduledAt)}</Text>
+                  <Text style={styles.schedLine}>Appt · {formatDateTime(item.scheduledAt)}</Text>
                 ) : (
                   <Text style={styles.schedLineNone}>No appointment time set</Text>
                 )}
@@ -251,8 +251,8 @@ const styles = StyleSheet.create({
   versionStamp: { textAlign: 'center', color: colors.grayLine, fontSize: 11, paddingVertical: 4 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   calIconBtn: { paddingHorizontal: 2 },
-  calIcon: { fontSize: 22 },
-  headerUser: { color: colors.white, fontSize: 15, fontWeight: '800', maxWidth: 120 },
+  calIcon: { color: colors.white, fontSize: 15, fontWeight: '800' },
+  headerUser: { color: colors.white, fontSize: 15, fontWeight: '800', maxWidth: 110 },
   // calendar
   calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   calNav: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
