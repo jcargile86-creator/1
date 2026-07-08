@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { ScrollView, Text, TextInput, Pressable, StyleSheet, View } from 'react-native';
+import React, { useLayoutEffect, useState } from 'react';
+import { ScrollView, Text, TextInput, Pressable, StyleSheet, View, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { ClaimInfo } from '../types';
 import { listFlows, DEFAULT_FLOW_ID } from '../flows';
+import { parseSchedule } from '../lib/schedule';
 import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewInspection'>;
@@ -38,19 +39,61 @@ const FIELDS: { key: keyof ClaimInfo; label: string; placeholder?: string }[] = 
   { key: 'otherStructures', label: 'Other Structures' },
 ];
 
-export default function NewInspectionScreen({ navigation }: Props) {
-  const { createInspection } = useInspections();
+export default function NewInspectionScreen({ navigation, route }: Props) {
+  const { createInspection, createAssignment } = useInspections();
+  const isAssignment = route.params?.mode === 'assignment';
   const [claim, setClaim] = useState<ClaimInfo>(empty);
   const [flowId, setFlowId] = useState(DEFAULT_FLOW_ID);
+  const [schedDate, setSchedDate] = useState('');
+  const [schedTime, setSchedTime] = useState('');
   const flows = listFlows();
 
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: isAssignment ? 'Add Assignment' : 'New Inspection' });
+  }, [navigation, isAssignment]);
+
+  const carrierClaim = () => ({ ...claim, carrier: flows.find((f) => f.id === flowId)?.carrier ?? claim.carrier });
+
   const start = async () => {
-    const insp = await createInspection({ ...claim, carrier: flows.find((f) => f.id === flowId)?.carrier ?? claim.carrier }, flowId);
+    const insp = await createInspection(carrierClaim(), flowId);
     navigation.replace('Inspection', { id: insp.id });
+  };
+
+  const addAssignment = async () => {
+    let scheduledAt: string | undefined;
+    if (schedDate.trim()) {
+      scheduledAt = parseSchedule(schedDate, schedTime);
+      if (!scheduledAt) {
+        Alert.alert('Check the appointment', 'Use date MM/DD/YYYY and time like 2:30 PM (or leave both blank).');
+        return;
+      }
+    }
+    await createAssignment(carrierClaim(), { scheduledAt, source: 'manual' }, flowId);
+    navigation.goBack();
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: spacing.xl * 2 }} keyboardShouldPersistTaps="handled">
+      {isAssignment && (
+        <>
+          <Text style={styles.groupLabel}>Appointment</Text>
+          <Text style={styles.helpText}>
+            This mirrors an incoming XactAnalysis assignment — it lands in Pending for accept/deny and shows on the
+            calendar. Leave the time blank to schedule it later.
+          </Text>
+          <View style={styles.schedRow}>
+            <View style={{ flex: 1.3 }}>
+              <Text style={styles.fieldLabel}>Date</Text>
+              <TextInput style={styles.input} value={schedDate} onChangeText={setSchedDate} placeholder="MM/DD/YYYY" placeholderTextColor={colors.grayLine} keyboardType="numbers-and-punctuation" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Time</Text>
+              <TextInput style={styles.input} value={schedTime} onChangeText={setSchedTime} placeholder="2:30 PM" placeholderTextColor={colors.grayLine} />
+            </View>
+          </View>
+        </>
+      )}
+
       <Text style={styles.groupLabel}>Carrier Flow</Text>
       {flows.map((f) => (
         <Pressable key={f.id} style={[styles.flowCard, flowId === f.id && styles.flowCardActive]} onPress={() => setFlowId(f.id)}>
@@ -73,8 +116,8 @@ export default function NewInspectionScreen({ navigation }: Props) {
         </View>
       ))}
 
-      <Pressable style={styles.startBtn} onPress={start}>
-        <Text style={styles.startText}>Create Inspection</Text>
+      <Pressable style={styles.startBtn} onPress={isAssignment ? addAssignment : start}>
+        <Text style={styles.startText}>{isAssignment ? 'Add to Pending' : 'Create Inspection'}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -83,6 +126,8 @@ export default function NewInspectionScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.md },
   groupLabel: { fontSize: 14, fontWeight: '800', color: colors.navy, marginTop: spacing.md, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 1 },
+  helpText: { fontSize: 13, color: colors.grayText, marginBottom: spacing.sm, fontWeight: '600' },
+  schedRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   flowCard: { backgroundColor: colors.white, borderRadius: touch.radius, padding: spacing.md, borderWidth: 1, borderColor: colors.grayLine, marginBottom: spacing.sm },
   flowCardActive: { backgroundColor: colors.navy, borderColor: colors.navy },
   flowTitle: { fontSize: 16, fontWeight: '700', color: colors.ink },

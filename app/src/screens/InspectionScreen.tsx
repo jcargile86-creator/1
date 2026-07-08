@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
@@ -8,6 +8,7 @@ import { AreaTab, SectionDef, QuestionDef } from '../flows/types';
 import { buildQueue, firstPendingIndex, isDone, PhotoQueueItem } from '../flows/queue';
 import { answerKey } from '../types';
 import { generateReport } from '../report/generate';
+import { formatDateTime } from '../lib/schedule';
 import PromptChecklist from '../components/PromptChecklist';
 import QuestionFields from '../components/QuestionFields';
 import { colors, spacing, touch } from '../theme';
@@ -32,7 +33,7 @@ interface SubEntry {
 
 export default function InspectionScreen({ route, navigation }: Props) {
   const { id } = route.params;
-  const { getInspection, updateInspection } = useInspections();
+  const { getInspection, updateInspection, acceptInspection, declineInspection, submitInspection, markSeen } = useInspections();
   const inspection = getInspection(id);
   const [busy, setBusy] = useState(false);
   const [area, setArea] = useState<AreaTab>('start');
@@ -46,6 +47,11 @@ export default function InspectionScreen({ route, navigation }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({ title: inspection ? `Claim ${inspection.claim.claimNumber || '—'}` : 'Inspection' });
   }, [navigation, inspection]);
+
+  // Opening a freshly-arrived pending claim clears its "new" badge.
+  useEffect(() => {
+    if (inspection && inspection.seen === false) void markSeen(inspection.id);
+  }, [inspection?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flow = inspection ? getFlow(inspection.flowId) : undefined;
 
@@ -90,12 +96,15 @@ export default function InspectionScreen({ route, navigation }: Props) {
     navigation.navigate('Camera', { id, startKey: queue[idx]?.key });
   };
 
-  const makeReport = async () => {
-    // Hard gate: every required photo in the walk (N/A sections excluded)
-    // must be captured or consciously skipped before the PDF can generate.
-    const missed = buildQueue(flow, inspection).filter(
+  /** Required photos still missing (N/A sections excluded). */
+  const missingRequired = () =>
+    buildQueue(flow, inspection).filter(
       (q): q is PhotoQueueItem => q.kind === 'photo' && !q.prompt.optional && !isDone(inspection, q),
     );
+
+  const makeReport = async () => {
+    // Hard gate: every required photo must be captured or consciously skipped.
+    const missed = missingRequired();
     if (missed.length) {
       setMissing(missed);
       return;
@@ -108,6 +117,25 @@ export default function InspectionScreen({ route, navigation }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Submit: same required-photo gate, then move the claim to Completed. */
+  const submitClaim = () => {
+    const missed = missingRequired();
+    if (missed.length) {
+      setMissing(missed);
+      return;
+    }
+    Alert.alert('Submit this claim?', 'It moves to Completed. Generate/attach the PDF report first if you haven’t.', [
+      { text: 'Not yet', style: 'cancel' },
+      {
+        text: 'Submit',
+        onPress: () => {
+          void submitInspection(id);
+          navigation.goBack();
+        },
+      },
+    ]);
   };
 
   const toggleNa = (sectionId: string, title: string) => {
@@ -261,6 +289,29 @@ export default function InspectionScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      {inspection.status === 'pending' && (
+        <View style={styles.statusBanner}>
+          <Text style={styles.statusBannerText}>
+            Pending assignment{inspection.scheduledAt ? ` · ${formatDateTime(inspection.scheduledAt)}` : ''}
+          </Text>
+          <View style={styles.statusActions}>
+            <Pressable style={[styles.statusBtn, styles.statusDeny]} onPress={() => { void declineInspection(id); navigation.goBack(); }}>
+              <Text style={styles.statusDenyText}>Deny</Text>
+            </Pressable>
+            <Pressable style={[styles.statusBtn, styles.statusAccept]} onPress={() => void acceptInspection(id)}>
+              <Text style={styles.statusAcceptText}>Accept</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {inspection.status === 'completed' && (
+        <View style={[styles.statusBanner, styles.statusDone]}>
+          <Text style={styles.statusDoneText}>
+            ✓ Submitted{inspection.submittedAt ? ` ${formatDateTime(inspection.submittedAt)}` : ''}
+          </Text>
+        </View>
+      )}
+
       <Pressable style={styles.resumeBtn} onPress={resumeCapture}>
         <Text style={styles.resumeText}>Resume Guided Capture</Text>
       </Pressable>
@@ -313,6 +364,13 @@ export default function InspectionScreen({ route, navigation }: Props) {
             <Pressable style={[styles.reportBtn, styles.docsBtn]} onPress={() => navigation.navigate('Documents', { id })}>
               <Text style={[styles.reportText, { color: colors.navy }]}>Documents ({inspection.documents.length})</Text>
             </Pressable>
+            {inspection.status !== 'completed' ? (
+              <Pressable style={[styles.reportBtn, styles.submitBtn]} onPress={submitClaim}>
+                <Text style={styles.reportText}>Submit Claim</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.submittedNote}>Submitted {inspection.submittedAt ? formatDateTime(inspection.submittedAt) : ''}</Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -390,7 +448,19 @@ const styles = StyleSheet.create({
   addBtn: { backgroundColor: colors.navy, borderRadius: 10, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center' },
   reportBtn: { backgroundColor: colors.navy, borderRadius: touch.radius, minHeight: touch.minHeight + 4, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   docsBtn: { backgroundColor: colors.white, borderWidth: 2, borderColor: colors.navy },
+  submitBtn: { backgroundColor: colors.green, marginTop: spacing.sm },
+  submittedNote: { textAlign: 'center', color: colors.green, fontWeight: '800', fontSize: 15, marginTop: spacing.sm },
   reportText: { color: colors.white, fontSize: 17, fontWeight: '800' },
+  statusBanner: { backgroundColor: colors.navy, borderRadius: touch.radius, padding: spacing.md, marginBottom: spacing.sm },
+  statusBannerText: { color: colors.white, fontSize: 15, fontWeight: '800', marginBottom: spacing.sm },
+  statusActions: { flexDirection: 'row', gap: spacing.sm },
+  statusBtn: { flex: 1, borderRadius: 10, minHeight: touch.minHeight - 8, alignItems: 'center', justifyContent: 'center' },
+  statusAccept: { backgroundColor: colors.green, flex: 2 },
+  statusAcceptText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  statusDeny: { backgroundColor: 'rgba(255,255,255,0.15)' },
+  statusDenyText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  statusDone: { backgroundColor: colors.green },
+  statusDoneText: { color: colors.white, fontSize: 15, fontWeight: '800' },
   missingBackdrop: { flex: 1, backgroundColor: 'rgba(10,12,30,0.55)', justifyContent: 'flex-end' },
   missingSheet: { backgroundColor: colors.offWhite, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.md, paddingBottom: spacing.xl },
   missingTitle: { fontSize: 19, fontWeight: '800', color: colors.red, marginBottom: 4 },

@@ -1,6 +1,6 @@
 export type RootStackParamList = {
   Home: undefined;
-  NewInspection: undefined;
+  NewInspection: { mode?: 'now' | 'assignment' } | undefined;
   Inspection: { id: string };
   Section: { id: string; sectionId: string };
   Camera: { id: string; sectionId?: string; instance?: string; startKey?: string };

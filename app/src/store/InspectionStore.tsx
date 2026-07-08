@@ -2,8 +2,14 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { Paths } from 'expo-file-system';
-import { Inspection, ClaimInfo } from '../types';
+import { Inspection, ClaimInfo, ClaimStatus } from '../types';
 import { DEFAULT_FLOW_ID, getFlow } from '../flows';
+
+export interface AssignmentMeta {
+  assignedAt?: string;
+  scheduledAt?: string;
+  source?: 'xact' | 'manual';
+}
 
 const INDEX_KEY = 'inspectpro/index';
 const itemKey = (id: string) => `inspectpro/inspection/${id}`;
@@ -11,7 +17,14 @@ const itemKey = (id: string) => `inspectpro/inspection/${id}`;
 interface StoreShape {
   loading: boolean;
   inspections: Inspection[];
+  /** Start a walk-in inspection immediately (status = in_progress). */
   createInspection: (claim: ClaimInfo, flowId?: string) => Promise<Inspection>;
+  /** Intake a claim as a pending assignment (Xact feed or manual add). */
+  createAssignment: (claim: ClaimInfo, meta?: AssignmentMeta, flowId?: string) => Promise<Inspection>;
+  acceptInspection: (id: string) => Promise<Inspection | undefined>;
+  declineInspection: (id: string, reason?: string) => Promise<Inspection | undefined>;
+  submitInspection: (id: string) => Promise<Inspection | undefined>;
+  markSeen: (id: string) => Promise<Inspection | undefined>;
   updateInspection: (id: string, mutate: (draft: Inspection) => void) => Promise<Inspection | undefined>;
   deleteInspection: (id: string) => Promise<void>;
   getInspection: (id: string) => Inspection | undefined;
@@ -57,7 +70,19 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
           .map(([, v]) => (v ? (JSON.parse(v) as Inspection) : null))
           .filter((x): x is Inspection => !!x)
           // migrate records saved before newer fields existed
-          .map((x) => rebaseInspection({ ...x, sectionSkipped: x.sectionSkipped ?? {}, documents: x.documents ?? [] }))
+          // migrate: pre-lifecycle records are in-progress manual walk-ins
+          .map((x) =>
+            rebaseInspection({
+              ...x,
+              sectionSkipped: x.sectionSkipped ?? {},
+              documents: x.documents ?? [],
+              source: x.source ?? 'manual',
+              status: x.status ?? 'in_progress',
+              assignedAt: x.assignedAt ?? x.createdAt,
+              acceptedAt: x.acceptedAt ?? x.createdAt,
+              seen: x.seen ?? true,
+            }),
+          )
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         setInspections(items);
       } finally {
@@ -84,6 +109,50 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
         updatedAt: now,
         flowId: flow.id,
         claim,
+        source: 'manual',
+        status: 'in_progress',
+        assignedAt: now,
+        acceptedAt: now,
+        seen: true,
+        photos: [],
+        answers: {},
+        notes: {},
+        instances,
+        skipped: {},
+        sectionSkipped: {},
+        sketches: [],
+        documents: [],
+      };
+      await AsyncStorage.setItem(itemKey(insp.id), JSON.stringify(insp));
+      setInspections((prev) => {
+        const next = [insp, ...prev];
+        void persist(next);
+        return next;
+      });
+      return insp;
+    },
+    [persist],
+  );
+
+  const createAssignment = useCallback(
+    async (claim: ClaimInfo, meta: AssignmentMeta = {}, flowId: string = DEFAULT_FLOW_ID) => {
+      const flow = getFlow(flowId);
+      const instances: Record<string, string[]> = {};
+      for (const s of flow.sections) {
+        if (s.repeat) instances[s.id] = [...(s.repeat.presets ?? [])];
+      }
+      const now = new Date().toISOString();
+      const insp: Inspection = {
+        id: newId(),
+        createdAt: now,
+        updatedAt: now,
+        flowId: flow.id,
+        claim,
+        source: meta.source ?? 'manual',
+        status: 'pending',
+        assignedAt: meta.assignedAt ?? now,
+        scheduledAt: meta.scheduledAt,
+        seen: false,
         photos: [],
         answers: {},
         notes: {},
@@ -124,6 +193,37 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
     [],
   );
 
+  const setStatus = useCallback(
+    (id: string, status: ClaimStatus, extra?: (d: Inspection) => void) =>
+      updateInspection(id, (d) => {
+        d.status = status;
+        d.seen = true;
+        extra?.(d);
+      }),
+    [updateInspection],
+  );
+
+  const acceptInspection = useCallback(
+    (id: string) => setStatus(id, 'in_progress', (d) => { d.acceptedAt = new Date().toISOString(); }),
+    [setStatus],
+  );
+  const declineInspection = useCallback(
+    (id: string, reason?: string) =>
+      setStatus(id, 'declined', (d) => {
+        d.declinedAt = new Date().toISOString();
+        if (reason) d.declineReason = reason;
+      }),
+    [setStatus],
+  );
+  const submitInspection = useCallback(
+    (id: string) => setStatus(id, 'completed', (d) => { d.submittedAt = new Date().toISOString(); }),
+    [setStatus],
+  );
+  const markSeen = useCallback(
+    (id: string) => updateInspection(id, (d) => { d.seen = true; }),
+    [updateInspection],
+  );
+
   const deleteInspection = useCallback(
     async (id: string) => {
       await AsyncStorage.removeItem(itemKey(id));
@@ -142,8 +242,20 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
   );
 
   const value = useMemo(
-    () => ({ loading, inspections, createInspection, updateInspection, deleteInspection, getInspection }),
-    [loading, inspections, createInspection, updateInspection, deleteInspection, getInspection],
+    () => ({
+      loading,
+      inspections,
+      createInspection,
+      createAssignment,
+      acceptInspection,
+      declineInspection,
+      submitInspection,
+      markSeen,
+      updateInspection,
+      deleteInspection,
+      getInspection,
+    }),
+    [loading, inspections, createInspection, createAssignment, acceptInspection, declineInspection, submitInspection, markSeen, updateInspection, deleteInspection, getInspection],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

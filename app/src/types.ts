@@ -46,12 +46,30 @@ export interface SketchRecord {
 
 export type AnswerValue = string | number | boolean;
 
+/** Claim lifecycle: assigned (pending) → accepted (in_progress) →
+ *  submitted (completed); declined is a terminal off-ramp from pending. */
+export type ClaimStatus = 'pending' | 'in_progress' | 'completed' | 'declined';
+
 export interface Inspection {
   id: string;
   createdAt: string;
   updatedAt: string;
   flowId: string;
   claim: ClaimInfo;
+  /** Where the claim came from — 'xact' assignments arrive via the Xact
+   *  feed; 'manual' are walk-ins / hand-entered. */
+  source: 'xact' | 'manual';
+  status: ClaimStatus;
+  /** When the assignment landed (Xact push time or manual add). */
+  assignedAt?: string;
+  /** Scheduled appointment date/time — drives the calendar. */
+  scheduledAt?: string;
+  acceptedAt?: string;
+  submittedAt?: string;
+  declinedAt?: string;
+  declineReason?: string;
+  /** False until the inspector has viewed a newly-arrived pending claim. */
+  seen?: boolean;
   photos: PhotoRecord[];
   /** answers keyed by `sectionId:questionId` or `sectionId:instance:questionId` */
   answers: Record<string, AnswerValue>;
