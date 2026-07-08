@@ -78,7 +78,7 @@ export default function InspectionScreen({ route, navigation }: Props) {
       for (const inst of inspection.instances[s.id] ?? []) {
         entries.push({
           key: `${s.id}:${inst}`,
-          label: s.id === 'wind' ? `Facet ${inst}` : s.id === 'test-squares' ? `${inst} Slope` : s.id === 'elevations' ? `${inst} Elevation` : inst,
+          label: s.id === 'wind' || s.id === 'test-squares' ? `${inst} Slope` : s.id === 'elevations' ? `${inst} Elevation` : inst,
           sectionId: s.id,
           instance: inst,
         });

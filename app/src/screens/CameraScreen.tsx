@@ -92,7 +92,12 @@ const SECTION_TERMS: Record<string, string[]> = {
   wrapup: [],
 };
 
+/** Wind is labeled by facet — one-tap letters to stamp the caption. */
+const FACET_CHIPS = ['Facet A', 'Facet B', 'Facet C', 'Facet D', 'Facet E', 'Facet F'];
+
 function suggestTerms(sectionId: string, promptId?: string): string[] {
+  // Wind shots lead with facet letters so labeling the facet is one tap.
+  if (sectionId === 'wind') return [...FACET_CHIPS, ...(PROMPT_TERMS[promptId ?? ''] ?? SECTION_TERMS[sectionId] ?? [])];
   if (promptId && PROMPT_TERMS[promptId]) return PROMPT_TERMS[promptId];
   // Generated quadrant prompts: overviews stay clean, condition close-ups
   // get the shingle-surface terms.
@@ -164,6 +169,9 @@ export default function CameraScreen({ route, navigation }: Props) {
   const [lastThumb, setLastThumb] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPhoto | null>(null);
   const [caption, setCaption] = useState('');
+  /** CAD sketch reference overlay (facet letters live on the diagram). */
+  const [cadOpen, setCadOpen] = useState(false);
+  const [cadIndex, setCadIndex] = useState(0);
   const cameraRef = useRef<Camera>(null);
   /** In-flight capture/save work — caption confirm/retake await this. */
   const captureTask = useRef<Promise<boolean> | null>(null);
@@ -482,6 +490,20 @@ export default function CameraScreen({ route, navigation }: Props) {
     advanceOrReturn();
   };
 
+  /** CAD / facet diagrams the inspector can reference mid-flow (image docs). */
+  const cadDocs = inspection.documents.filter((d) => d.mimeType.startsWith('image/'));
+  const openCad = () => {
+    if (cadDocs.length === 0) {
+      Alert.alert('No CAD sketch yet', 'Upload the CAD / facet diagram from the claim’s Documents and it’ll be one tap away here for facet-letter reference.', [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Open Documents', onPress: () => navigation.navigate('Documents', { id }) },
+      ]);
+      return;
+    }
+    setCadIndex(0);
+    setCadOpen(true);
+  };
+
   /** Back cancels an active detour (returns to the walk); otherwise steps
    *  one stop back. */
   const goBackOne = () => {
@@ -548,9 +570,14 @@ export default function CameraScreen({ route, navigation }: Props) {
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
           <Text style={styles.counter}>{Math.min(index + 1, queue.length)}/{queue.length} · {doneCount} done</Text>
-          <Pressable onPress={() => setFlash((f) => (f === 'off' ? 'auto' : f === 'auto' ? 'on' : 'off'))} hitSlop={12}>
-            <Text style={styles.flashText}>{flash === 'on' ? 'FLASH ON' : flash === 'auto' ? 'FLASH AUTO' : 'FLASH OFF'}</Text>
-          </Pressable>
+          <View style={styles.topRightGroup}>
+            <Pressable onPress={openCad} hitSlop={10} style={styles.cadBtn}>
+              <Text style={styles.cadBtnText}>CAD{cadDocs.length ? ` ${cadDocs.length}` : ''}</Text>
+            </Pressable>
+            <Pressable onPress={() => setFlash((f) => (f === 'off' ? 'auto' : f === 'auto' ? 'on' : 'off'))} hitSlop={12}>
+              <Text style={styles.flashText}>{flash === 'on' ? 'FLASH ON' : flash === 'auto' ? 'FLASH AUTO' : 'FLASH OFF'}</Text>
+            </Pressable>
+          </View>
         </View>
         {current ? (
           <>
@@ -728,6 +755,39 @@ export default function CameraScreen({ route, navigation }: Props) {
         )}
       </View>
 
+      {/* CAD sketch reference — pinch to zoom into facet letters, then
+          close and keep shooting. */}
+      {cadOpen && (
+        <View style={styles.cadOverlay}>
+          <ScrollView
+            style={StyleSheet.absoluteFill}
+            contentContainerStyle={styles.cadScroll}
+            maximumZoomScale={6}
+            minimumZoomScale={1}
+            centerContent
+          >
+            <Image source={{ uri: cadDocs[cadIndex]?.uri }} style={styles.cadImage} resizeMode="contain" />
+          </ScrollView>
+          <View style={[styles.cadTop, { paddingTop: insets.top + 6 }]}>
+            <Text style={styles.cadName} numberOfLines={1}>{cadDocs[cadIndex]?.name ?? 'CAD Sketch'}</Text>
+            <Pressable onPress={() => setCadOpen(false)} hitSlop={12}>
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
+          </View>
+          {cadDocs.length > 1 && (
+            <View style={[styles.cadNav, { paddingBottom: insets.bottom + 12 }]}>
+              <Pressable onPress={() => setCadIndex((i) => Math.max(0, i - 1))} style={styles.cadNavBtn}>
+                <Text style={styles.cadNavText}>‹ Prev</Text>
+              </Pressable>
+              <Text style={styles.cadCount}>{cadIndex + 1}/{cadDocs.length}</Text>
+              <Pressable onPress={() => setCadIndex((i) => Math.min(cadDocs.length - 1, i + 1))} style={styles.cadNavBtn}>
+                <Text style={styles.cadNavText}>Next ›</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Section-change interstitial — fades in over the live camera and
           right back out; shooting is never blocked. When the block just
           left has unshot items, the banner lingers and a tap detours back
@@ -878,7 +938,19 @@ const styles = StyleSheet.create({
   closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   closeText: { color: colors.white, fontSize: 24, fontWeight: '700' },
   counter: { color: '#c6c9e8', fontSize: 13, fontWeight: '700' },
+  topRightGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cadBtn: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  cadBtnText: { color: colors.white, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
   flashText: { color: '#ffd54f', fontSize: 13, fontWeight: '800' },
+  cadOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  cadScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
+  cadImage: { width: '100%', height: '100%' },
+  cadTop: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: 'rgba(12,14,36,0.8)' },
+  cadName: { color: colors.white, fontSize: 15, fontWeight: '800', flex: 1, marginRight: spacing.md },
+  cadNav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, backgroundColor: 'rgba(12,14,36,0.8)', paddingTop: spacing.sm },
+  cadNavBtn: { paddingVertical: spacing.sm },
+  cadNavText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  cadCount: { color: '#c6c9e8', fontSize: 14, fontWeight: '700' },
   tagRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   sectionTag: { color: '#9fa5d6', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, flexShrink: 1 },
   badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
