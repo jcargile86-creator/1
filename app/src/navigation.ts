@@ -1,5 +1,6 @@
 export type RootStackParamList = {
   Home: undefined;
+  Calendar: undefined;
   NewInspection: { mode?: 'now' | 'assignment' } | undefined;
   Inspection: { id: string };
   Section: { id: string; sectionId: string };

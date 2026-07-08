@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './src/store/AuthStore';
 import { colors } from './src/theme';
 import SignInScreen from './src/screens/SignInScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import CalendarScreen from './src/screens/CalendarScreen';
 import NewInspectionScreen from './src/screens/NewInspectionScreen';
 import InspectionScreen from './src/screens/InspectionScreen';
 import SectionScreen from './src/screens/SectionScreen';
@@ -39,6 +40,7 @@ function MainStack() {
       }}
     >
       <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'InspectPro' }} />
+      <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: 'Calendar' }} />
       <Stack.Screen name="NewInspection" component={NewInspectionScreen} options={{ title: 'New Inspection' }} />
       <Stack.Screen name="Inspection" component={InspectionScreen} options={{ title: 'Inspection' }} />
       <Stack.Screen name="Section" component={SectionScreen} options={{ title: 'Section' }} />

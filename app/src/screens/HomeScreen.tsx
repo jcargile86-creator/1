@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
@@ -8,21 +8,12 @@ import { useInspections } from '../store/InspectionStore';
 import { useAuth } from '../store/AuthStore';
 import { deleteInspectionPhotos } from '../store/photos';
 import { Inspection, ClaimStatus } from '../types';
-import {
-  buildMonthGrid,
-  dayKey,
-  dayKeyOf,
-  formatDateTime,
-  formatDayLabel,
-  formatTime,
-  relativeSince,
-  WEEKDAY_LABELS,
-} from '../lib/schedule';
+import { formatDateTime, formatDayLabel, relativeSince } from '../lib/schedule';
 import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-type Tab = 'pending' | 'calendar' | 'active' | 'done';
+type Tab = 'pending' | 'active' | 'done';
 
 export default function HomeScreen({ navigation }: Props) {
   const { inspections, loading, deleteInspection, acceptInspection, declineInspection } = useInspections();
@@ -32,19 +23,24 @@ export default function HomeScreen({ navigation }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable
-          hitSlop={10}
-          onPress={() =>
-            Alert.alert(currentUser?.displayName ?? 'Inspector', `Signed in as ${currentUser?.username ?? ''}`, [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign Out', style: 'destructive', onPress: () => void signOut() },
-            ])
-          }
-        >
-          <Text style={styles.headerUser} numberOfLines={1}>
-            {(currentUser?.displayName ?? '').split(' ')[0] || 'Account'} ⌄
-          </Text>
-        </Pressable>
+        <View style={styles.headerRow}>
+          <Pressable hitSlop={10} onPress={() => navigation.navigate('Calendar')} style={styles.calIconBtn}>
+            <Text style={styles.calIcon}>🗓</Text>
+          </Pressable>
+          <Pressable
+            hitSlop={10}
+            onPress={() =>
+              Alert.alert(currentUser?.displayName ?? 'Inspector', `Signed in as ${currentUser?.username ?? ''}`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign Out', style: 'destructive', onPress: () => void signOut() },
+              ])
+            }
+          >
+            <Text style={styles.headerUser} numberOfLines={1}>
+              {(currentUser?.displayName ?? '').split(' ')[0] || 'Account'} ⌄
+            </Text>
+          </Pressable>
+        </View>
       ),
     });
   }, [navigation, currentUser, signOut]);
@@ -83,7 +79,6 @@ export default function HomeScreen({ navigation }: Props) {
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: 'pending', label: 'Pending', count: groups.pending.length },
-    { key: 'calendar', label: 'Calendar', count: 0 },
     { key: 'active', label: 'Active', count: groups.in_progress.length },
     { key: 'done', label: 'Completed', count: groups.completed.length },
   ];
@@ -106,7 +101,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Pressable key={t.key} style={[styles.tab, tab === t.key && styles.tabActive]} onPress={() => setTab(t.key)}>
               <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]} numberOfLines={1}>
                 {t.label}
-                {t.count > 0 && t.key !== 'calendar' ? ` ${t.count}` : ''}
+                {t.count > 0 ? ` ${t.count}` : ''}
               </Text>
               {showBadge && (
                 <View style={styles.badge}>
@@ -161,8 +156,6 @@ export default function HomeScreen({ navigation }: Props) {
         />
       )}
 
-      {tab === 'calendar' && <CalendarView claims={inspections} onOpen={openInspection} />}
-
       {tab === 'active' && (
         <FlatList
           data={groups.in_progress}
@@ -215,81 +208,6 @@ function SimpleCard({ item, onOpen, onDelete }: { item: Inspection; onOpen: (id:
   );
 }
 
-function CalendarView({ claims, onOpen }: { claims: Inspection[]; onOpen: (id: string) => void }) {
-  const today = new Date();
-  const [ym, setYm] = useState({ year: today.getFullYear(), month: today.getMonth() });
-  const [selected, setSelected] = useState<string>(dayKeyOf(today));
-
-  const byDay = useMemo(() => {
-    const m: Record<string, Inspection[]> = {};
-    for (const c of claims) {
-      if (!c.scheduledAt || c.status === 'declined') continue;
-      const k = dayKey(c.scheduledAt);
-      (m[k] = m[k] ?? []).push(c);
-    }
-    for (const k of Object.keys(m)) m[k].sort((a, b) => (a.scheduledAt ?? '').localeCompare(b.scheduledAt ?? ''));
-    return m;
-  }, [claims]);
-
-  const grid = useMemo(() => buildMonthGrid(ym.year, ym.month), [ym]);
-  const step = (delta: number) => {
-    const m = ym.month + delta;
-    setYm({ year: ym.year + Math.floor(m / 12), month: ((m % 12) + 12) % 12 });
-  };
-  const todayKey = dayKeyOf(today);
-  const dayClaims = byDay[selected] ?? [];
-
-  return (
-    <ScrollView contentContainerStyle={styles.listPad}>
-      <View style={styles.calHeader}>
-        <Pressable onPress={() => step(-1)} hitSlop={12} style={styles.calNav}><Text style={styles.calNavText}>‹</Text></Pressable>
-        <Text style={styles.calTitle}>{grid.label}</Text>
-        <Pressable onPress={() => step(1)} hitSlop={12} style={styles.calNav}><Text style={styles.calNavText}>›</Text></Pressable>
-      </View>
-      <View style={styles.weekRow}>
-        {WEEKDAY_LABELS.map((d, i) => (
-          <Text key={i} style={styles.weekLabel}>{d}</Text>
-        ))}
-      </View>
-      <View style={styles.calGrid}>
-        {grid.cells.map((cell, i) => {
-          if (!cell) return <View key={i} style={styles.calCell} />;
-          const k = dayKeyOf(cell);
-          const count = (byDay[k] ?? []).length;
-          const isSel = k === selected;
-          const isToday = k === todayKey;
-          return (
-            <Pressable key={i} style={[styles.calCell, isSel && styles.calCellSel]} onPress={() => setSelected(k)}>
-              <Text style={[styles.calDay, isToday && styles.calDayToday, isSel && styles.calDaySel]}>{cell.getDate()}</Text>
-              {count > 0 && <View style={[styles.calDot, isSel && { backgroundColor: colors.white }]} />}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={styles.agendaHeader}>{formatDayLabel(`${selected}T12:00:00`)}</Text>
-      {dayClaims.length === 0 ? (
-        <Text style={styles.agendaEmpty}>No appointments this day.</Text>
-      ) : (
-        dayClaims.map((c) => (
-          <Pressable key={c.id} style={styles.agendaRow} onPress={() => onOpen(c.id)}>
-            <Text style={styles.agendaTime}>{c.scheduledAt ? formatTime(c.scheduledAt) : '—'}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.agendaTitle}>{c.claim.insured || 'Unnamed insured'}</Text>
-              <Text style={styles.agendaSub}>{c.claim.lossAddress || 'no address'} · {statusLabel(c.status)}</Text>
-            </View>
-            <Text style={styles.chev}>›</Text>
-          </Pressable>
-        ))
-      )}
-    </ScrollView>
-  );
-}
-
-function statusLabel(s: ClaimStatus): string {
-  return s === 'pending' ? 'Pending' : s === 'in_progress' ? 'In Progress' : s === 'completed' ? 'Submitted' : 'Declined';
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.md },
   topRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
@@ -331,7 +249,10 @@ const styles = StyleSheet.create({
   declinedPillText: { color: colors.white, fontSize: 10, fontWeight: '800' },
   chev: { fontSize: 26, color: colors.grayLine, marginLeft: spacing.sm },
   versionStamp: { textAlign: 'center', color: colors.grayLine, fontSize: 11, paddingVertical: 4 },
-  headerUser: { color: colors.white, fontSize: 15, fontWeight: '800', maxWidth: 140 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  calIconBtn: { paddingHorizontal: 2 },
+  calIcon: { fontSize: 22 },
+  headerUser: { color: colors.white, fontSize: 15, fontWeight: '800', maxWidth: 120 },
   // calendar
   calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   calNav: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },

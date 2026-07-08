@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation';
 import { useInspections } from '../store/InspectionStore';
 import { getFlow } from '../flows';
@@ -15,13 +16,13 @@ import { colors, spacing, touch } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Inspection'>;
 
-/** Tabs in natural inspection-walk order. */
-const AREA_TABS: { key: AreaTab; label: string }[] = [
-  { key: 'start', label: 'Start' },
-  { key: 'elevations', label: 'Elev' },
-  { key: 'roof', label: 'Roof' },
-  { key: 'inside', label: 'Inside' },
-  { key: 'wrapup', label: 'Wrap-Up' },
+/** Bottom-nav stops in natural inspection-walk order. */
+const AREA_TABS: { key: AreaTab; label: string; icon: string }[] = [
+  { key: 'start', label: 'Start', icon: '🚩' },
+  { key: 'elevations', label: 'Elev', icon: '🏠' },
+  { key: 'roof', label: 'Roof', icon: '🔺' },
+  { key: 'inside', label: 'Inside', icon: '🛋' },
+  { key: 'wrapup', label: 'Wrap-Up', icon: '✅' },
 ];
 
 interface SubEntry {
@@ -34,6 +35,7 @@ interface SubEntry {
 export default function InspectionScreen({ route, navigation }: Props) {
   const { id } = route.params;
   const { getInspection, updateInspection, acceptInspection, declineInspection, submitInspection, markSeen } = useInspections();
+  const insets = useSafeAreaInsets();
   const inspection = getInspection(id);
   const [busy, setBusy] = useState(false);
   const [area, setArea] = useState<AreaTab>('start');
@@ -316,15 +318,6 @@ export default function InspectionScreen({ route, navigation }: Props) {
         <Text style={styles.resumeText}>Resume Guided Capture</Text>
       </Pressable>
 
-      {/* Top tabs — the walk: Start, Elevations, Roof, Inside, Wrap-Up */}
-      <View style={styles.areaTabs}>
-        {AREA_TABS.map((t) => (
-          <Pressable key={t.key} style={[styles.areaTab, area === t.key && styles.areaTabActive]} onPress={() => setArea(t.key)}>
-            <Text style={[styles.areaTabText, area === t.key && styles.areaTabTextActive]} numberOfLines={1}>{t.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
       <ScrollView style={styles.content} contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.xl * 2 }}>
         {entries.map(renderEntry)}
 
@@ -375,6 +368,20 @@ export default function InspectionScreen({ route, navigation }: Props) {
         )}
       </ScrollView>
 
+      {/* Bottom nav — the walk: Start, Elevations, Roof, Inside, Wrap-Up */}
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom || spacing.sm }]}>
+        {AREA_TABS.map((t) => {
+          const active = area === t.key;
+          return (
+            <Pressable key={t.key} style={styles.navItem} onPress={() => setArea(t.key)}>
+              <View style={[styles.navIndicator, active && styles.navIndicatorActive]} />
+              <Text style={[styles.navIcon, !active && styles.navIconInactive]}>{t.icon}</Text>
+              <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={1}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* Report gate — missing required photos, each row jumps straight
           to that shot in the camera. */}
       <Modal visible={!!missing} transparent animationType="slide" onRequestClose={() => setMissing(null)}>
@@ -418,12 +425,15 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   resumeBtn: { backgroundColor: colors.red, margin: spacing.md, marginBottom: spacing.sm, borderRadius: touch.radius, minHeight: touch.minHeight, alignItems: 'center', justifyContent: 'center' },
   resumeText: { color: colors.white, fontSize: 18, fontWeight: '800' },
-  areaTabs: { flexDirection: 'row', marginHorizontal: spacing.md, backgroundColor: colors.white, borderRadius: touch.radius, borderWidth: 1, borderColor: colors.grayLine, overflow: 'hidden' },
-  areaTab: { flex: 1, minHeight: touch.minHeight - 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  areaTabActive: { backgroundColor: colors.navy },
-  areaTabText: { fontSize: 13, fontWeight: '800', color: colors.grayText },
-  areaTabTextActive: { color: colors.white },
-  content: { flex: 1, marginTop: spacing.sm },
+  bottomNav: { flexDirection: 'row', backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.grayLine, paddingTop: 6 },
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 2 },
+  navIndicator: { height: 3, width: 26, borderRadius: 2, backgroundColor: 'transparent', marginBottom: 4 },
+  navIndicatorActive: { backgroundColor: colors.red },
+  navIcon: { fontSize: 20 },
+  navIconInactive: { opacity: 0.45 },
+  navLabel: { fontSize: 11, fontWeight: '800', color: colors.grayText, marginTop: 2 },
+  navLabelActive: { color: colors.navy },
+  content: { flex: 1 },
   entryCard: { backgroundColor: colors.white, borderRadius: touch.radius, borderWidth: 1, borderColor: colors.grayLine, marginBottom: spacing.sm, overflow: 'hidden' },
   entryHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.sm, minHeight: touch.minHeight + 6, backgroundColor: colors.navy },
   entryTitle: { color: colors.white, fontSize: 17, fontWeight: '800' },
