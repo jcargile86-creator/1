@@ -1,0 +1,14 @@
+# Supabase CLI project config. Link this directory to your project with:
+#   supabase link --project-ref <your-project-ref>
+# then push the schema with:
+#   supabase db push
+project_id = "inspectpro"
+
+[auth]
+# Email + password sign-in for inspectors. Turn confirmations off for the
+# field pilot so accounts work immediately; re-enable for production.
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false

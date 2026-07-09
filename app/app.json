@@ -29,6 +29,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "extra": {
+      "supabaseUrl": "",
+      "supabaseAnonKey": ""
+    },
     "plugins": [
       [
         "react-native-vision-camera",
