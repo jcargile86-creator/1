@@ -21,6 +21,12 @@ import { XactTransport, XactExportPayload, XactTransportResult } from './types';
  * store.createAssignment(claim, { assignedAt, scheduledAt, source: 'xact' }).
  * That drops it into the Pending tab exactly like the manual "+ Assignment"
  * path, so the accept/deny/schedule/submit lifecycle is already in place.
+ *
+ * PHOTO RETENTION: on a successful send() (every attachment confirmed
+ * received), call store.clearLocalPhotos(claimId). That marks the claim
+ * xactSubmittedAt, flags each photo uploadedToXact, and deletes the local
+ * binaries to reclaim device space — XactAnalysis is then the system of
+ * record. Never purge before a confirmed submission; there is no cloud copy.
  */
 class NotConfiguredTransport implements XactTransport {
   readonly name = 'xactanalysis-stub';

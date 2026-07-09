@@ -34,7 +34,7 @@ interface SubEntry {
 
 export default function InspectionScreen({ route, navigation }: Props) {
   const { id } = route.params;
-  const { getInspection, updateInspection, acceptInspection, declineInspection, submitInspection, markSeen } = useInspections();
+  const { getInspection, updateInspection, acceptInspection, declineInspection, submitInspection, markSeen, clearLocalPhotos } = useInspections();
   const insets = useSafeAreaInsets();
   const inspection = getInspection(id);
   const [busy, setBusy] = useState(false);
@@ -119,6 +119,20 @@ export default function InspectionScreen({ route, navigation }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Reclaim device space by deleting local photo files — gated behind an
+   *  explicit confirmation that the claim is already in XactAnalysis, since
+   *  this is irreversible and there is no cloud copy. */
+  const clearPhotos = () => {
+    Alert.alert(
+      'Clear local photos?',
+      'Only do this once XactAnalysis shows the claim received. The photo files will be permanently deleted from this device to free space — captions and the report record stay. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete Local Photos', style: 'destructive', onPress: () => void clearLocalPhotos(id) },
+      ],
+    );
   };
 
   /** Submit: same required-photo gate, then move the claim to Completed. */
@@ -364,6 +378,19 @@ export default function InspectionScreen({ route, navigation }: Props) {
             ) : (
               <Text style={styles.submittedNote}>Submitted {inspection.submittedAt ? formatDateTime(inspection.submittedAt) : ''}</Text>
             )}
+
+            {/* Space reclaim — only after the claim is safely in XactAnalysis. */}
+            {inspection.status === 'completed' && inspection.photos.length > 0 && (
+              inspection.photosPurgedAt ? (
+                <Text style={styles.purgedNote}>
+                  Local photos cleared {formatDateTime(inspection.photosPurgedAt)} · originals are in XactAnalysis
+                </Text>
+              ) : (
+                <Pressable style={[styles.reportBtn, styles.clearBtn]} onPress={clearPhotos}>
+                  <Text style={[styles.reportText, { color: colors.amber }]}>Clear Local Photos ({inspection.photos.length})</Text>
+                </Pressable>
+              )
+            )}
           </View>
         )}
       </ScrollView>
@@ -458,6 +485,8 @@ const styles = StyleSheet.create({
   docsBtn: { backgroundColor: colors.white, borderWidth: 2, borderColor: colors.navy },
   submitBtn: { backgroundColor: colors.green, marginTop: spacing.sm },
   submittedNote: { textAlign: 'center', color: colors.green, fontWeight: '800', fontSize: 15, marginTop: spacing.sm },
+  clearBtn: { backgroundColor: colors.white, borderWidth: 2, borderColor: colors.amber, marginTop: spacing.sm },
+  purgedNote: { textAlign: 'center', color: colors.grayText, fontWeight: '700', fontSize: 13, marginTop: spacing.sm },
   reportText: { color: colors.white, fontSize: 17, fontWeight: '800' },
   statusBanner: { backgroundColor: colors.navy, borderRadius: touch.radius, padding: spacing.md, marginBottom: spacing.sm },
   statusBannerText: { color: colors.white, fontSize: 15, fontWeight: '800', marginBottom: spacing.sm },

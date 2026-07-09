@@ -25,6 +25,10 @@ export interface PhotoRecord {
   /** Caption base from the prompt label; inspector can append measurements/adjectives. */
   caption: string;
   takenAt: string; // ISO
+  /** Confirmed received by XactAnalysis — precondition for local deletion. */
+  uploadedToXact?: boolean;
+  /** Local binary deleted after Xact submission; metadata/caption retained. */
+  purged?: boolean;
 }
 
 export interface DocumentRecord {
@@ -68,6 +72,10 @@ export interface Inspection {
   submittedAt?: string;
   declinedAt?: string;
   declineReason?: string;
+  /** Confirmed submitted to XactAnalysis — gates local photo deletion. */
+  xactSubmittedAt?: string;
+  /** Local photo binaries cleared (post-Xact) to reclaim device space. */
+  photosPurgedAt?: string;
   /** False until the inspector has viewed a newly-arrived pending claim. */
   seen?: boolean;
   photos: PhotoRecord[];

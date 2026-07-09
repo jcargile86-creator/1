@@ -26,3 +26,18 @@ export function deleteInspectionPhotos(inspectionId: string): void {
     // best-effort cleanup
   }
 }
+
+/** Delete one photo's on-device files (full-res, preview, print copy) after
+ *  it's safely in XactAnalysis. The photo RECORD (caption/metadata) is kept;
+ *  only the binaries go, to reclaim space. */
+export function purgePhotoFiles(inspectionId: string, photoId: string): void {
+  const dir = new Directory(Paths.document, 'photos', inspectionId);
+  for (const name of [`${photoId}.jpg`, `${photoId}-preview.jpg`, `${photoId}-print.jpg`]) {
+    try {
+      const f = new File(dir, name);
+      if (f.exists) f.delete();
+    } catch {
+      // best-effort — a missing file is already "purged"
+    }
+  }
+}

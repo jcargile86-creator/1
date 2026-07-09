@@ -98,7 +98,14 @@ export default function PhotoReviewScreen({ route, navigation }: Props) {
         )}
         {photos.map((p) => (
           <View key={p.id} style={styles.card}>
-            <Image source={{ uri: p.uri }} style={styles.photo} />
+            {p.purged ? (
+              <View style={[styles.photo, styles.purgedBox]}>
+                <Text style={styles.purgedText}>Local copy cleared</Text>
+                <Text style={styles.purgedSub}>Original submitted to XactAnalysis</Text>
+              </View>
+            ) : (
+              <Image source={{ uri: p.uri }} style={styles.photo} />
+            )}
             <TextInput
               style={styles.captionInput}
               value={drafts[p.id] ?? p.caption}
@@ -138,6 +145,9 @@ const styles = StyleSheet.create({
   empty: { textAlign: 'center', color: colors.grayText, marginTop: spacing.xl },
   card: { backgroundColor: colors.white, borderRadius: touch.radius, borderWidth: 1, borderColor: colors.grayLine, marginBottom: spacing.md, overflow: 'hidden' },
   photo: { width: '100%', height: 340, backgroundColor: '#111' },
+  purgedBox: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.offWhite },
+  purgedText: { color: colors.grayText, fontSize: 16, fontWeight: '800' },
+  purgedSub: { color: colors.grayText, fontSize: 13, marginTop: 4 },
   captionInput: { paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 16, fontWeight: '600', color: colors.ink },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingBottom: 10 },
   timestamp: { fontSize: 12, color: colors.grayText },

@@ -95,7 +95,13 @@ export default function GalleryScreen({ route, navigation }: Props) {
                 : undefined
             }
           >
-            <Image source={{ uri: item.previewUri ?? item.uri }} style={styles.photo} />
+            {item.purged ? (
+              <View style={[styles.photo, styles.purgedBox]}>
+                <Text style={styles.purgedText}>Cleared</Text>
+              </View>
+            ) : (
+              <Image source={{ uri: item.previewUri ?? item.uri }} style={styles.photo} />
+            )}
             <View style={styles.captionRow}>
               <Text style={styles.caption} numberOfLines={2}>{item.caption}</Text>
               <Text style={styles.time}>{new Date(item.takenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
@@ -120,6 +126,8 @@ const styles = StyleSheet.create({
   groupCount: { fontSize: 13, fontWeight: '800', color: colors.grayText },
   card: { backgroundColor: colors.white, borderRadius: touch.radius, borderWidth: 1, borderColor: colors.grayLine, marginBottom: spacing.sm, overflow: 'hidden' },
   photo: { width: '100%', height: 300, backgroundColor: '#111' },
+  purgedBox: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.offWhite },
+  purgedText: { color: colors.grayText, fontSize: 15, fontWeight: '800' },
   captionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, paddingHorizontal: spacing.md },
   caption: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.ink },
   time: { fontSize: 12, color: colors.grayText },

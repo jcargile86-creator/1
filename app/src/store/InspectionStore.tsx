@@ -5,6 +5,7 @@ import { Paths } from 'expo-file-system';
 import { Inspection, ClaimInfo, ClaimStatus } from '../types';
 import { DEFAULT_FLOW_ID, getFlow } from '../flows';
 import { useAuth } from './AuthStore';
+import { purgePhotoFiles } from './photos';
 
 export interface AssignmentMeta {
   assignedAt?: string;
@@ -29,6 +30,9 @@ interface StoreShape {
   declineInspection: (id: string, reason?: string) => Promise<Inspection | undefined>;
   submitInspection: (id: string) => Promise<Inspection | undefined>;
   markSeen: (id: string) => Promise<Inspection | undefined>;
+  /** Mark a claim confirmed-in-XactAnalysis and delete its local photo files
+   *  (space reclaim). Metadata/captions are kept; binaries go. */
+  clearLocalPhotos: (id: string) => Promise<Inspection | undefined>;
   updateInspection: (id: string, mutate: (draft: Inspection) => void) => Promise<Inspection | undefined>;
   deleteInspection: (id: string) => Promise<void>;
   getInspection: (id: string) => Inspection | undefined;
@@ -263,6 +267,23 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
     [updateInspection],
   );
 
+  const clearLocalPhotos = useCallback(
+    async (id: string) => {
+      const insp = inspections.find((i) => i.id === id);
+      if (insp) for (const p of insp.photos) purgePhotoFiles(id, p.id);
+      return updateInspection(id, (d) => {
+        const now = new Date().toISOString();
+        if (!d.xactSubmittedAt) d.xactSubmittedAt = now;
+        d.photos.forEach((p) => {
+          p.uploadedToXact = true;
+          p.purged = true;
+        });
+        d.photosPurgedAt = now;
+      });
+    },
+    [inspections, updateInspection],
+  );
+
   const deleteInspection = useCallback(
     async (id: string) => {
       await AsyncStorage.removeItem(itemKey(id));
@@ -290,11 +311,12 @@ export function InspectionProvider({ children }: { children: React.ReactNode }) 
       declineInspection,
       submitInspection,
       markSeen,
+      clearLocalPhotos,
       updateInspection,
       deleteInspection,
       getInspection,
     }),
-    [loading, inspections, createInspection, createAssignment, acceptInspection, declineInspection, submitInspection, markSeen, updateInspection, deleteInspection, getInspection],
+    [loading, inspections, createInspection, createAssignment, acceptInspection, declineInspection, submitInspection, markSeen, clearLocalPhotos, updateInspection, deleteInspection, getInspection],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
