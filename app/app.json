@@ -30,8 +30,8 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "supabaseUrl": "",
-      "supabaseAnonKey": ""
+      "supabaseUrl": "https://grbycumzzbbdhdbtujtf.supabase.co",
+      "supabaseAnonKey": "sb_publishable_fw-p5yH_qSWWmY70VOHHCA_OPHR6m2s"
     },
     "plugins": [
       [
